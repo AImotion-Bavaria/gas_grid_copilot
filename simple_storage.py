@@ -35,5 +35,45 @@ def get_example_line():
     # now for some of the results:
     return net
 
+def plot_trajectory(output_dict):
+    mass_df = output_dict["mass_storage.m_stored_kg"]
+    ext_grid_flow = output_dict["res_ext_grid.mdot_kg_per_s"]
+    source_flow = output_dict["res_source.mdot_kg_per_s"]
+    mass_storage_flow = output_dict["mass_storage.mdot_kg_per_s"]
+    mass_df.columns = ['mass_storage']
+    
+    # plotting the state of charge
+    import matplotlib.pyplot as plt 
+    
+    # Assuming the index of your data frames represents time
+    time_index = mass_df.index
+
+    # Create a horizontal subplot with 3 subplots
+    fig, axs = plt.subplots(1, 2, figsize=(15, 5))
+
+    # Plotting the data frames on each subplot
+    axs[0].plot(time_index, mass_df, color='blue')
+    axs[0].set_title('Mass Storage')
+    axs[0].set_xlabel('Values')
+    axs[0].set_ylabel('Time')
+
+    axs[1].plot(time_index, ext_grid_flow,  color='green', label ="Ext grid flow")
+    axs[1].set_xlabel('Values')
+
+    axs[1].plot( time_index, source_flow, color='red', label = "Source flow")
+    axs[1].set_xlabel('Values')
+    axs[1].legend()
+
+    axs[1].plot( time_index, mass_storage_flow, color='blue', label = "Mass storage flow")
+    axs[1].set_title('Flows')
+    axs[1].set_xlabel('Values')
+    axs[1].legend()
+
+    # Adjust layout for better spacing
+    plt.tight_layout()
+
+    # Show the plot
+    plt.show()
+
 if __name__ == "__main__":
     net = get_example_line()

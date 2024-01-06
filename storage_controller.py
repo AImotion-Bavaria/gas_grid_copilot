@@ -116,61 +116,33 @@ class StorageController(Controller):
 def run_simulation(net, ow : ts.OutputWriter, individual_steps=True):
     # starting time series simulation
     np.random.seed(232022 )
+
+    output_dict = None
     if individual_steps:
-        mass_dfs = []
-        for i in range(0, 6):
-            run_timeseries(net, time_steps=range(i, i+1))
-            print("-----------------")
-            print(ow.output["mass_storage.m_stored_kg"])
-            mass_dfs.append(ow.output["mass_storage.m_stored_kg"])
-            print("-----------------")
-            print(net.mass_storage.at[0, "m_stored_kg"])
-        mass_df = pd.concat(mass_dfs, ignore_index=True)
+        from timeseries_wrapper import TimeseriesWrapper
+        wrapper = TimeseriesWrapper(net, ow, log_variables)
+        wrapper.run_timeseries(net, time_steps=range(0,6))
+        output_dict  = wrapper.output
+
+        # mass_dfs = []
+        # for i in range(0, 6):
+        #     run_timeseries(net, time_steps=range(i, i+1))
+        #     print("-----------------")
+        #     print(ow.output["mass_storage.m_stored_kg"])
+        #     mass_dfs.append(ow.output["mass_storage.m_stored_kg"])
+        #     print("-----------------")
+        #     print(net.mass_storage.at[0, "m_stored_kg"])
+        # mass_df = pd.concat(mass_dfs, ignore_index=True)
     else: 
         run_timeseries(net, time_steps=range(0,6))
-        mass_df = ow.output["mass_storage.m_stored_kg"]
-        ext_grid_flow = ow.output["res_ext_grid.mdot_kg_per_s"]
-        source_flow = ow.output["res_source.mdot_kg_per_s"]
-        mass_storage_flow = ow.output["mass_storage.mdot_kg_per_s"]
-    # run_timeseries(net, time_steps=range(0, 6))
-    mass_df.columns = ['mass_storage']
+        output_dict = ow.output
     
-    # plotting the state of charge
-    import matplotlib.pyplot as plt 
+    plot_trajectory(output_dict)
     
-    # Assuming the index of your data frames represents time
-    time_index = mass_df.index
-
-    # Create a horizontal subplot with 3 subplots
-    fig, axs = plt.subplots(1, 2, figsize=(15, 5))
-
-    # Plotting the data frames on each subplot
-    axs[0].plot(time_index, mass_df, color='blue')
-    axs[0].set_title('Mass Storage')
-    axs[0].set_xlabel('Values')
-    axs[0].set_ylabel('Time')
-
-    axs[1].plot(time_index, ext_grid_flow,  color='green', label ="Ext grid flow")
-    axs[1].set_xlabel('Values')
-
-    axs[1].plot( time_index, source_flow, color='red', label = "Source flow")
-    axs[1].set_xlabel('Values')
-    axs[1].legend()
-
-    axs[1].plot( time_index, mass_storage_flow, color='blue', label = "Mass storage flow")
-    axs[1].set_title('Flows')
-    axs[1].set_xlabel('Values')
-    axs[1].legend()
-
-    # Adjust layout for better spacing
-    plt.tight_layout()
-
-    # Show the plot
-    plt.show()
 
 if __name__ == "__main__":
 
-    from simple_storage import get_example_line
+    from simple_storage import get_example_line, plot_trajectory
     # loading the network
     net = get_example_line()
     pp.pipeflow(net)
@@ -183,26 +155,21 @@ if __name__ == "__main__":
     # creating an Object of our new build storage controller, controlling the storage unit
     ctrl = StorageController(net=net, sid=0, data_source=datasource, mdot_profile='mdot_storage')
 
-    framedata2 = pd.DataFrame([0.1, 0, 0.1, 0, 0.2, 0.1])
+    framedata2 = pd.DataFrame([0.1, 0, 0.1, 0, 0.2, 0.1], columns = ["mdot_kg_per_s"])
     ds_source = ts.DFData(framedata2)
-
-    target_path_source = os.path.join(os.path.dirname(__file__), 'storage_source_profiles.csv')
-    profiles_source = pd.read_csv(target_path_source,
-                                            index_col=0)
-    ds_source = DFData(profiles_source)
-
     const_source = control.ConstControl(net, element='source', variable='mdot_kg_per_s',
                                     element_index=net.source.index.values,
                                     data_source=ds_source,
-                                    profile_name=net.source.index.values.astype(str))
+                                    profile_name="mdot_kg_per_s")
     
     from pandapipes.timeseries import run_timeseries
     # defining an OutputWriter to track certain variables
     log_variables = [("mass_storage", "mdot_kg_per_s"), ("res_mass_storage", "mdot_kg_per_s"),
-                    ("mass_storage", "m_stored_kg"), ("res_ext_grid", "mdot_kg_per_s"),
+                    ("mass_storage", "m_stored_kg"), ("mass_storage", "filling_level_percent"),
+                      ("res_ext_grid", "mdot_kg_per_s"),
                     ("res_source", "mdot_kg_per_s")] 
-                    #('res_sink', 'mdot_kg_per_s')]
+    
     ow = ts.OutputWriter(net, log_variables=log_variables, output_path=None)
 
-    #run_simulation(net, ow, True)
+    run_simulation(net, ow, True)
     run_simulation(net, ow, False)
