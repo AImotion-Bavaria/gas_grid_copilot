@@ -1,5 +1,9 @@
 import pandapipes as pp
 import pandas as pd
+import numpy as np
+
+# plotting the state of charge
+import matplotlib.pyplot as plt 
 
 def get_example_line():
     # let's create the net first
@@ -36,6 +40,25 @@ def get_example_line():
     # now for some of the results:
     return net
 
+def get_multimodal_flow(num_values, modes : list, max_flow : float):
+    # Generate an array with 10 values between 0 and 10
+    x = np.linspace(0, num_values, num_values)
+
+    # Create Gaussian modes around the 3rd and 7th entries
+    mode_functions = [np.exp(-(x - mode_center)**2 / (2 * 1**2)) for mode_center in modes]
+    # Combine the modes and scale to get the final array with the highest value of 0.02
+    combined = np.sum(mode_functions, axis=0)
+    final_array = max_flow * (combined) / (np.max(combined))
+    return x, final_array
+
+def plot_flow(x, y):
+    # Plot the array
+    plt.plot(x, y, marker='o', linestyle='-', color='b')
+    plt.title('Array with Gaussian Modes')
+    plt.xlabel('Index')
+    plt.ylabel('Value')
+    plt.show()
+
 def plot_trajectory(output_dict, reward_trajectory : pd.DataFrame = None):
     mass_df = output_dict["mass_storage.m_stored_kg"]
     ext_grid_flow = output_dict["res_ext_grid.mdot_kg_per_s"]
@@ -43,8 +66,6 @@ def plot_trajectory(output_dict, reward_trajectory : pd.DataFrame = None):
     mass_storage_flow = output_dict["mass_storage.mdot_kg_per_s"]
     mass_df.columns = ['mass_storage']
     
-    # plotting the state of charge
-    import matplotlib.pyplot as plt 
     
     # Assuming the index of your data frames represents time
     time_index = mass_df.index

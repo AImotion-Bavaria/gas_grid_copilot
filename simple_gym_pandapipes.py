@@ -4,7 +4,7 @@ from gymnasium import spaces
 
 import pandapipes as pp 
 import pandas as pd
-from simple_storage import get_example_line, plot_trajectory
+from simple_storage import get_example_line, plot_trajectory, get_multimodal_flow
 from storage_controller import StorageController
 
 import pandapipes as pp
@@ -90,7 +90,8 @@ class SimpleGasStorageEnv(gym.Env):
         self.storage_flow_df = storage_flow_df
 
         # TODO here we'll want something that has an actual learnable pattern
-        source_in_flow_df = pd.DataFrame([0.01] * SimpleGasStorageEnv.MAX_TIME_STEPS, columns = ["mdot_kg_per_s"])
+        _, source_flow = get_multimodal_flow(SimpleGasStorageEnv.MAX_TIME_STEPS, [3, 7], 0.04)
+        source_in_flow_df = pd.DataFrame(source_flow, columns = ["mdot_kg_per_s"])
         datasource_source_in_flow = DFData(source_in_flow_df)
         const_source = control.ConstControl(self.net, element='source', variable='mdot_kg_per_s',
                                         element_index=self.net.source.index.values,
