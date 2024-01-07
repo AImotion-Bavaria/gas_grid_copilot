@@ -1,4 +1,5 @@
 import pandapipes as pp
+import pandas as pd
 
 def get_example_line():
     # let's create the net first
@@ -35,7 +36,7 @@ def get_example_line():
     # now for some of the results:
     return net
 
-def plot_trajectory(output_dict):
+def plot_trajectory(output_dict, reward_trajectory : pd.DataFrame = None):
     mass_df = output_dict["mass_storage.m_stored_kg"]
     ext_grid_flow = output_dict["res_ext_grid.mdot_kg_per_s"]
     source_flow = output_dict["res_source.mdot_kg_per_s"]
@@ -48,26 +49,48 @@ def plot_trajectory(output_dict):
     # Assuming the index of your data frames represents time
     time_index = mass_df.index
 
-    # Create a horizontal subplot with 3 subplots
-    fig, axs = plt.subplots(1, 2, figsize=(15, 5))
+    # Create a horizontal subplot with 4 subplots
+    if reward_trajectory is None:
+        fig, axs = plt.subplots(1, 2, figsize=(15, 5))
+            # Plotting the data frames on each subplot
+        axs[0].plot(time_index, mass_df, color='blue')
+        axs[0].set_title('Mass Storage')
+        axs[0].set_xlabel('Values')
+        axs[0].set_ylabel('Time')
 
-    # Plotting the data frames on each subplot
-    axs[0].plot(time_index, mass_df, color='blue')
-    axs[0].set_title('Mass Storage')
-    axs[0].set_xlabel('Values')
-    axs[0].set_ylabel('Time')
+        axs[1].plot(time_index, ext_grid_flow,  color='green', label ="Ext grid flow")
+        axs[1].set_xlabel('Values')
 
-    axs[1].plot(time_index, ext_grid_flow,  color='green', label ="Ext grid flow")
-    axs[1].set_xlabel('Values')
+        axs[1].plot( time_index, source_flow, color='red', label = "Source flow")
+        axs[1].set_xlabel('Values')
+        axs[1].legend()
 
-    axs[1].plot( time_index, source_flow, color='red', label = "Source flow")
-    axs[1].set_xlabel('Values')
-    axs[1].legend()
+        axs[1].plot( time_index, mass_storage_flow, color='blue', label = "Mass storage flow")
+        axs[1].set_title('Flows')
+        axs[1].set_xlabel('Values')
+        axs[1].legend()
+    else:
+        fig, axs = plt.subplots(2, 2, figsize=(15, 8))
+        # Plotting the data frames on each subplot
+        axs[0,0].plot(time_index, mass_df, color='blue')
+        axs[0,0].set_title('Mass Storage')
+        axs[0,0].set_xlabel('Values')
+        axs[0,0].set_ylabel('Time')
 
-    axs[1].plot( time_index, mass_storage_flow, color='blue', label = "Mass storage flow")
-    axs[1].set_title('Flows')
-    axs[1].set_xlabel('Values')
-    axs[1].legend()
+        axs[0, 1].plot(time_index, ext_grid_flow,  color='green', label ="Ext grid flow")
+        axs[0, 1].set_xlabel('Values')
+
+        axs[0, 1].plot( time_index, source_flow, color='red', label = "Source flow")
+        axs[0, 1].set_xlabel('Values')
+        axs[0, 1].legend()
+
+        axs[0, 1].plot( time_index, mass_storage_flow, color='blue', label = "Mass storage flow")
+        axs[0, 1].set_title('Flows')
+        axs[0, 1].set_xlabel('Values')
+        axs[0, 1].legend()
+
+        reward_trajectory.plot(ax=axs[1,0]) 
+   
 
     # Adjust layout for better spacing
     plt.tight_layout()

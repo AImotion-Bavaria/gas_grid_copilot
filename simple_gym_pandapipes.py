@@ -20,6 +20,28 @@ from pandapipes.networks import gas_meshed_square
 
 from timeseries_wrapper import TimeseriesWrapper
 
+def storage_reward(x):
+    if 0 <= x < 0.25:
+        return 0
+    elif 0.25 <= x <= 0.5:
+        return 4 * (x - 0.25)
+    elif 0.5 < x < 0.75:
+        return 1 - 4 * (x - 0.5)
+    elif 0.75 <= x <= 1:
+        return 0
+
+def plot_storage_reward():
+    x = np.linspace(0, 1, 1000)
+    y = [storage_reward(i) for i in x]
+
+    import matplotlib.pyplot as plt
+    plt.plot(x, y)
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.title('Plot of the defined function over the interval [0, 1]')
+    plt.grid(True)
+    plt.show()
+
 class SimpleGasStorageEnv(gym.Env):
     """Custom Environment that follows gym interface."""
 
@@ -53,6 +75,7 @@ class SimpleGasStorageEnv(gym.Env):
                                             high=np.array([self.max_m_stored_kg, 1.0, self.max_storage_mdot_kg_per_s]),
                                             shape=(3,),
                                             dtype=np.float32)
+        self.last_action = mass_storage["mdot_kg_per_s"] 
 
     def __init_pandapipes_ts(self):
         """ sets up everything we need to run pandapipes time series simulations
@@ -96,33 +119,52 @@ class SimpleGasStorageEnv(gym.Env):
 
         return np.array([mass_stored, last_flow, source_mdot_kg_per_s])
 
-    def __get_info(self):
-        return {}
-    
+
     def step(self, action : float):
         # write current action into the data source that the pandapipes simulation is using
         self.storage_flow_df.loc[self.current_timestep] = action
         print(f"* picking action ... {action}")
         # simulating ... 
         self.timeseries_wrapper.run_timestep(self.net, self.current_timestep)
+
         # evaluating to get the reward ...
+        rewards = self.__get_rewards(action)
+        # do simple linearization here:
+        reward = np.sum([val for key, val in rewards])
 
         self.current_timestep += 1
 
-        reward = 0
         terminated = False
         observation = self.__get_obs()
         truncated = False
-        info = self.__get_info()
+        info = {"rewards" : self.rewards}
         return observation, reward, terminated, truncated, info
 
+    def __get_rewards(self, chosen_action):
+        # 1. Storage should be between 25% and 75%
+        mass_storage = self.net.mass_storage.loc[self.mass_storage_id]
+        filling_level_percent = self.net.mass_storage.loc[self.mass_storage_id]["filling_level_percent"]
+        reward_storage = storage_reward(filling_level_percent / 100) # to convert to percentage in [0,1]
+
+        # 2. Minimize external grid mass flow
+        ext_mass_flow = self.net.res_ext_grid.loc[0]["mdot_kg_per_s"]
+        reward_mass_flow = -ext_mass_flow
+
+        # 3. Do not change too much   
+        difference = abs(self.last_action - chosen_action)
+        reward_difference = -difference
+
+        self.rewards = [("reward_storage", reward_storage), ("reward_mass_flow", reward_mass_flow), ("reward_difference", reward_difference)]
+        return self.rewards
+    
     def reset(self, seed=None, options=None):
         # get all initial parameters set up again
         self.net = self.net_gen_func()
         pp.pipeflow(self.net)
         self.current_timestep = 0
         self.__init_pandapipes_ts()
-        return self.__get_obs(), self.__get_info()
+        info = {}
+        return self.__get_obs(), info
 
     def render(self):
         pass
@@ -141,8 +183,17 @@ if __name__ == "__main__":
     # just a dummy agent alway wanting the maximal inflow
     # just dummy rotating inflows
     inflows = [SimpleGasStorageEnv.MAX_STORAGE_MDOT_KG_PER_S, 0., SimpleGasStorageEnv.MIN_STORAGE_MDOT_KG_PER_S/2]
+    reward_trajectory = []
+    reward_cols = None
     for i in range(0, 5):
         print(f"*** Starting step {i}")
-        env.step(inflows[i % len(inflows)])
-    plot_trajectory(env.get_output_dict())
+        observation, reward, terminated, truncated, info = env.step(inflows[i % len(inflows)])
+        print(f"* Reward: {reward}, Observation: {observation}, Rewards: {info['rewards']}")
+        reward_trajectory.append([ val for key, val in info["rewards"]])
+        if reward_cols is None:
+            reward_cols = [key for key, val in info["rewards"]]
+
+    reward_trajectory = pd.DataFrame(reward_trajectory, columns = reward_cols)
+    reward_trajectory['total_reward'] = reward_trajectory.sum(axis=1)
+    plot_trajectory(env.get_output_dict(), reward_trajectory)
     
