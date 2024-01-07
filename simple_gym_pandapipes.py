@@ -20,6 +20,8 @@ from pandapipes.networks import gas_meshed_square
 
 from timeseries_wrapper import TimeseriesWrapper
 
+from stable_baselines3 import PPO, SAC
+
 def storage_reward(x):
     if 0 <= x < 0.25:
         return 0
@@ -48,7 +50,7 @@ class SimpleGasStorageEnv(gym.Env):
     metadata = {"render_modes": ["console"]}
     MIN_STORAGE_MDOT_KG_PER_S = -0.05
     MAX_STORAGE_MDOT_KG_PER_S = 0.05
-    MAX_TIME_STEPS = 5
+    MAX_TIME_STEPS = 10
 
     def __init__(self, net_gen_func, mass_storage_id = 0):
         super().__init__()
@@ -57,6 +59,7 @@ class SimpleGasStorageEnv(gym.Env):
         # define action and observation space for gym.spaces  .astype(np.float32)  dtype=np.float32
         self.net_gen_func = net_gen_func
         net = net_gen_func() # just for parameter transfer purposes
+        self._verbose = True
         self.current_timestep = 0 # needed to identify the inputs in the time series simulation in pandapipes
         self.min_storage_mdot_kg_per_s = SimpleGasStorageEnv.MIN_STORAGE_MDOT_KG_PER_S
         self.max_storage_mdot_kg_per_s = SimpleGasStorageEnv.MAX_STORAGE_MDOT_KG_PER_S
@@ -105,7 +108,7 @@ class SimpleGasStorageEnv(gym.Env):
                          ("res_source", "mdot_kg_per_s")] 
         
         self.ow = ts.OutputWriter(self.net, log_variables=log_variables, output_path=None)
-        self.timeseries_wrapper = TimeseriesWrapper(self.net, self.ow, log_variables)
+        self.timeseries_wrapper = TimeseriesWrapper(self.net, self.ow, log_variables, self._verbose)
 
     def __get_obs(self, init=True):
         mass_storage = self.net.mass_storage.loc[self.mass_storage_id]
@@ -123,8 +126,10 @@ class SimpleGasStorageEnv(gym.Env):
 
     def step(self, action : float):
         # write current action into the data source that the pandapipes simulation is using
+        if isinstance(action, np.ndarray): # SB-PPO does this
+            action = action.item() 
         self.storage_flow_df.loc[self.current_timestep] = action
-        print(f"* picking action ... {action}")
+        #print(f"* picking action ... {action}")
         # simulating ... 
         self.timeseries_wrapper.run_timestep(self.net, self.current_timestep)
 
@@ -135,8 +140,8 @@ class SimpleGasStorageEnv(gym.Env):
 
         self.current_timestep += 1
 
-        terminated = False
-        observation = self.__get_obs()
+        terminated = self.current_timestep >= SimpleGasStorageEnv.MAX_TIME_STEPS
+        observation = self.__get_obs(init=False)
         truncated = False
         info = {"rewards" : self.rewards}
         return observation, reward, terminated, truncated, info
@@ -144,14 +149,15 @@ class SimpleGasStorageEnv(gym.Env):
     def __get_rewards(self, chosen_action):
         # 1. Storage should be between 25% and 75%
         mass_storage = self.net.mass_storage.loc[self.mass_storage_id]
-        filling_level_percent = self.net.mass_storage.loc[self.mass_storage_id]["filling_level_percent"]
+        filling_level_percent = mass_storage["filling_level_percent"]
         reward_storage = storage_reward(filling_level_percent / 100) # to convert to percentage in [0,1]
 
         # 2. Minimize external grid mass flow
         ext_mass_flow = self.net.res_ext_grid.loc[0]["mdot_kg_per_s"]
-        reward_mass_flow = -ext_mass_flow
+        reward_mass_flow = 100* -ext_mass_flow
 
         # 3. Do not change too much   
+
         difference = abs(self.last_action - chosen_action)
         reward_difference = -difference
 
@@ -175,6 +181,64 @@ class SimpleGasStorageEnv(gym.Env):
 
     def get_output_dict(self):
         return self.timeseries_wrapper.output
+    
+    @property
+    def verbose(self):
+        """The verbose property to be passed to the time series wrapper."""
+        return self._verbose
+
+    @verbose.setter
+    def verbose(self, value):
+        self._verbose = value
+        self.timeseries_wrapper.verbose = value
+
+    @verbose.deleter
+    def verbose(self):
+        del self._verbose
+
+class FixedDummyAgent:
+    def __init__(self, actions_to_cycle) -> None:
+        self.counter = 0
+        self.actions_to_cycle = actions_to_cycle
+
+    def predict(self, obs): 
+        action = self.actions_to_cycle[self.counter % len(self.actions_to_cycle)]
+        self.counter += 1
+        return action, None
+
+def train_SB_Agent(env, algorithm=PPO, force_retraining = False):
+    env.reset()
+    env.verbose = False
+    print("Start training ... ")
+    model_file_name = f"{algorithm.__name__}_gas_storage.zip"
+    model_full_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), model_file_name)
+
+    if (not os.path.exists(model_full_path)) or force_retraining:
+        model = algorithm("MlpPolicy", env, verbose=1)
+        model.learn(total_timesteps=10000)
+        model.save(model_full_path)
+    else: 
+        model = algorithm.load(model_full_path)
+    return model
+
+
+def run_trajectory(env, agent):
+    reward_trajectory = []
+    reward_cols = None
+    observation, info = env.reset()
+
+    for i in range(0, 10):
+        print(f"*** Starting step {i}")
+        action, _states = agent.predict(observation)
+        observation, reward, terminated, truncated, info = env.step(action)
+        print(f"* Reward: {reward}, Observation: {observation}, Rewards: {info['rewards']}")
+        reward_trajectory.append([ val for key, val in info["rewards"]])
+        if reward_cols is None:
+            reward_cols = [key for key, val in info["rewards"]]
+
+    reward_trajectory = pd.DataFrame(reward_trajectory, columns = reward_cols)
+    reward_trajectory['total_reward'] = reward_trajectory.sum(axis=1)
+    plot_trajectory(env.get_output_dict(), reward_trajectory)
 
 if __name__ == "__main__":
     env = SimpleGasStorageEnv(get_example_line)
@@ -184,17 +248,10 @@ if __name__ == "__main__":
     # just a dummy agent alway wanting the maximal inflow
     # just dummy rotating inflows
     inflows = [SimpleGasStorageEnv.MAX_STORAGE_MDOT_KG_PER_S, 0., SimpleGasStorageEnv.MIN_STORAGE_MDOT_KG_PER_S/2]
-    reward_trajectory = []
-    reward_cols = None
-    for i in range(0, 5):
-        print(f"*** Starting step {i}")
-        observation, reward, terminated, truncated, info = env.step(inflows[i % len(inflows)])
-        print(f"* Reward: {reward}, Observation: {observation}, Rewards: {info['rewards']}")
-        reward_trajectory.append([ val for key, val in info["rewards"]])
-        if reward_cols is None:
-            reward_cols = [key for key, val in info["rewards"]]
+    fixed_dummy = FixedDummyAgent(inflows)
+    run_trajectory(env, fixed_dummy)
 
-    reward_trajectory = pd.DataFrame(reward_trajectory, columns = reward_cols)
-    reward_trajectory['total_reward'] = reward_trajectory.sum(axis=1)
-    plot_trajectory(env.get_output_dict(), reward_trajectory)
+    # train our very first agent to maximize the rewards
+    trained_agent = train_SB_Agent(env, algorithm=SAC, force_retraining=False)
+    run_trajectory(env, trained_agent)
     

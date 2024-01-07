@@ -56,7 +56,10 @@ class StorageController(Controller):
             else:  # "discharging", delta < 0
                 self.delta_m_kg_real = max(self.delta_m_kg_req, self.min_m_kg - self.m_stored_kg)
             self.m_stored_kg += self.delta_m_kg_real
-            self.mdot_kg_per_s = self.delta_m_kg_real / ((time - self.last_time_step)
+            if time - self.last_time_step == 0:
+                self.mdot_kg_per_s = 0
+            else:   
+                self.mdot_kg_per_s = self.delta_m_kg_real / ((time - self.last_time_step)
                                                          * self.duration_ts_sec)
         self.last_time_step = time
 

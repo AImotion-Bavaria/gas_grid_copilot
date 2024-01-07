@@ -3,10 +3,11 @@ from pandapipes.timeseries import run_timeseries
 import pandas as pd 
 
 class TimeseriesWrapper:
-    def __init__(self, net, output_writer : ts.OutputWriter, log_variables) -> None:
+    def __init__(self, net, output_writer : ts.OutputWriter, log_variables, verbose = True) -> None:
         self.net = net
         self.output_writer = output_writer
         self.log_variables = log_variables
+        self.verbose = verbose
 
         # set up output dictionary
         self.output = { f"{table}.{variable}": None for table, variable in self.log_variables}
@@ -21,7 +22,7 @@ class TimeseriesWrapper:
         """
         output_frames = { f"{table}.{variable}":[] for table, variable in self.log_variables}
         for t in time_steps:
-            run_timeseries(net, time_steps=range(t, t + 1))
+            run_timeseries(net, time_steps=range(t, t + 1), verbose=self.verbose)
             # update all the data frames the output writer writes to 
             for table, variable in self.log_variables:
                 key = f"{table}.{variable}"
@@ -33,7 +34,7 @@ class TimeseriesWrapper:
             self.output[key] = pd.concat(output_frames[key])
 
     def run_timestep(self, net, time_step):
-        run_timeseries(net, time_steps=range(time_step, time_step+1))
+        run_timeseries(net, time_steps=range(time_step, time_step+1), verbose=self.verbose)
         # add the recent data frame to the previous ones
         for table, variable in self.log_variables: 
             key = f"{table}.{variable}"

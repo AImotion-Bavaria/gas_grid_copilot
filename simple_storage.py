@@ -112,6 +112,17 @@ def plot_trajectory(output_dict, reward_trajectory : pd.DataFrame = None):
 
         reward_trajectory.plot(ax=axs[1,0]) 
    
+        # Sum values for each column
+        reward_sums = reward_trajectory.sum()
+
+        # Create a bar plot for the specific subplot axs[0, 1]
+        reward_sums.plot(kind='bar', ax=axs[1, 1])
+
+        # Adding labels and title
+        axs[1, 1].set_xlabel('Reward types')
+        axs[1, 1].set_ylabel('Cumulative rewards')
+        print("********")
+        print(reward_sums)
 
     # Adjust layout for better spacing
     plt.tight_layout()
