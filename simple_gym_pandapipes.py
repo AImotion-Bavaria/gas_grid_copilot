@@ -71,15 +71,35 @@ class SimpleGasStorageEnv(gym.Env):
         # observing 
         # - the current mass storage level 
         # - the current source inflow
+        # - the current sink outflow
         # - the last action we took
+
+
         mass_storage = net.mass_storage.loc[mass_storage_id]
-        self.min_m_stored_kg, self.max_m_stored_kg = mass_storage["min_m_stored_kg"],  mass_storage["max_m_stored_kg"],
-        self.observation_space = spaces.Box(low=np.array([self.min_m_stored_kg, -1.0, self.min_storage_mdot_kg_per_s]),
-                                            high=np.array([self.max_m_stored_kg, 1.0, self.max_storage_mdot_kg_per_s]),
-                                            shape=(3,),
-                                            dtype=np.float32)
+        self.min_m_stored_kg, self.max_m_stored_kg = mass_storage["min_m_stored_kg"],  mass_storage["max_m_stored_kg"]
+        observations = {
+            "mass_storage" : (self.min_m_stored_kg, self.max_m_stored_kg),
+            "source_inflow" : (-1.0, 1.0),
+            "sink_outflow" : (-1.0, 1.0),
+            "last_mass_flow" : (self.min_storage_mdot_kg_per_s, self.max_storage_mdot_kg_per_s),
+            "time" : (0, SimpleGasStorageEnv.MAX_TIME_STEPS)
+        }
+        self.observation_space = self.__convert_to_box(observations)
         self.last_action = mass_storage["mdot_kg_per_s"] 
 
+    def __convert_to_box(self, observations_dict):
+        low = []
+        high = []
+
+        for key, value in observations_dict.items():
+            low_, high_ = value
+            low.append(low_)
+            high.append(high_)
+        return spaces.Box(low=np.array(low),
+                   high=np.array(high),
+                   shape=(len(observations_dict.keys()),),
+                   dtype=np.float32)
+        
     def __init_pandapipes_ts(self):
         """ sets up everything we need to run pandapipes time series simulations
         """
@@ -92,25 +112,39 @@ class SimpleGasStorageEnv(gym.Env):
         ctrl = StorageController(net=self.net, sid=0, data_source=datasource_storage_flow, mdot_profile='mdot_storage')
         self.storage_flow_df = storage_flow_df
 
-        # TODO here we'll want something that has an actual learnable pattern
-        _, source_flow = get_multimodal_flow(SimpleGasStorageEnv.MAX_TIME_STEPS, [3, 7], 0.04)
+        _, source_flow = get_multimodal_flow(SimpleGasStorageEnv.MAX_TIME_STEPS, [2, 6], 0.04)
         source_in_flow_df = pd.DataFrame(source_flow, columns = ["mdot_kg_per_s"])
-        datasource_source_in_flow = DFData(source_in_flow_df)
         const_source = control.ConstControl(self.net, element='source', variable='mdot_kg_per_s',
                                         element_index=self.net.source.index.values,
-                                        data_source=datasource_source_in_flow,
+                                        data_source=DFData(source_in_flow_df),
+                                        profile_name="mdot_kg_per_s")
+        
+        # a bit delayed will be the consumption
+        _, sink_flow = get_multimodal_flow(SimpleGasStorageEnv.MAX_TIME_STEPS, [4, 8], 0.03)
+        sink_out_flow_df = pd.DataFrame(sink_flow, columns = ["mdot_kg_per_s"])
+        const_sink = control.ConstControl(self.net, element='sink', variable='mdot_kg_per_s',
+                                        element_index=self.net.sink.index.values,
+                                        data_source=DFData(sink_out_flow_df),
                                         profile_name="mdot_kg_per_s")
         
         # defining an OutputWriter to track certain variables
         log_variables = [("mass_storage", "mdot_kg_per_s"), ("res_mass_storage", "mdot_kg_per_s"),
                          ("mass_storage", "m_stored_kg"), ("mass_storage", "filling_level_percent"),
-                         ("res_ext_grid", "mdot_kg_per_s"),
-                         ("res_source", "mdot_kg_per_s")] 
+                         ("res_ext_grid", "mdot_kg_per_s"), ("res_source", "mdot_kg_per_s"), ("res_sink", "mdot_kg_per_s")] 
         
         self.ow = ts.OutputWriter(self.net, log_variables=log_variables, output_path=None)
         self.timeseries_wrapper = TimeseriesWrapper(self.net, self.ow, log_variables, self._verbose)
 
     def __get_obs(self, init=True):
+        """
+            observations = {
+            "mass_storage" : (self.min_m_stored_kg, self.max_m_stored_kg),
+            "source_inflow" : (-1.0, 1.0),
+            "sink_outflow" : (-1.0, 1.0),
+            "last_mass_flow" : (self.min_storage_mdot_kg_per_s, self.max_storage_mdot_kg_per_s),
+            "time" : (0, SimpleGasStorageEnv.MAX_TIME_STEPS)
+        }
+        """
         mass_storage = self.net.mass_storage.loc[self.mass_storage_id]
         if init:
             mass_stored = mass_storage["init_m_stored_kg"] # be careful, if we have already run a single time step
@@ -120,8 +154,8 @@ class SimpleGasStorageEnv(gym.Env):
         last_flow = self.net.res_mass_storage.loc[self.mass_storage_id]["mdot_kg_per_s"]
         # 0 for now, since we just have one source
         source_mdot_kg_per_s = self.net.res_source.loc[0]["mdot_kg_per_s"]
-
-        return np.array([mass_stored, last_flow, source_mdot_kg_per_s])
+        sink_mdot_kg_per_s = self.net.res_sink.loc[0]["mdot_kg_per_s"]
+        return np.array([mass_stored, source_mdot_kg_per_s, sink_mdot_kg_per_s, last_flow, self.current_timestep ])
 
 
     def step(self, action : float):
@@ -152,12 +186,11 @@ class SimpleGasStorageEnv(gym.Env):
         filling_level_percent = mass_storage["filling_level_percent"]
         reward_storage = storage_reward(filling_level_percent / 100) # to convert to percentage in [0,1]
 
-        # 2. Minimize external grid mass flow
+        # 2. Minimize external grid mass flow - should neither be positive or negative - ideally just work with charging/discharging storage
         ext_mass_flow = self.net.res_ext_grid.loc[0]["mdot_kg_per_s"]
-        reward_mass_flow = 100* -ext_mass_flow
+        reward_mass_flow = 100* -np.abs(ext_mass_flow)
 
         # 3. Do not change too much   
-
         difference = abs(self.last_action - chosen_action)
         reward_difference = -difference
 
@@ -252,6 +285,6 @@ if __name__ == "__main__":
     run_trajectory(env, fixed_dummy)
 
     # train our very first agent to maximize the rewards
-    trained_agent = train_SB_Agent(env, algorithm=SAC, force_retraining=False)
+    trained_agent = train_SB_Agent(env, algorithm=SAC, force_retraining=True)
     run_trajectory(env, trained_agent)
     

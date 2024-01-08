@@ -116,7 +116,7 @@ class StorageController(Controller):
         # check if controller already was applied
         return self.applied
 
-def run_simulation(net, ow : ts.OutputWriter, individual_steps=True):
+def run_simulation(net, ow : ts.OutputWriter, individual_steps=True, n_steps = 6):
     # starting time series simulation
     np.random.seed(232022 )
 
@@ -124,20 +124,10 @@ def run_simulation(net, ow : ts.OutputWriter, individual_steps=True):
     if individual_steps:
         from timeseries_wrapper import TimeseriesWrapper
         wrapper = TimeseriesWrapper(net, ow, log_variables)
-        wrapper.run_timeseries(net, time_steps=range(0,6))
+        wrapper.run_timeseries(net, time_steps=range(0,n_steps))
         output_dict  = wrapper.output
-
-        # mass_dfs = []
-        # for i in range(0, 6):
-        #     run_timeseries(net, time_steps=range(i, i+1))
-        #     print("-----------------")
-        #     print(ow.output["mass_storage.m_stored_kg"])
-        #     mass_dfs.append(ow.output["mass_storage.m_stored_kg"])
-        #     print("-----------------")
-        #     print(net.mass_storage.at[0, "m_stored_kg"])
-        # mass_df = pd.concat(mass_dfs, ignore_index=True)
     else: 
-        run_timeseries(net, time_steps=range(0,6))
+        run_timeseries(net, time_steps=range(0,n_steps))
         output_dict = ow.output
     
     plot_trajectory(output_dict)
@@ -152,27 +142,42 @@ if __name__ == "__main__":
 
     # creating a simple time series
     # -> that is what I would actually like to see controlled
-    framedata = pd.DataFrame([0.01, .05, -0.1, .005, -0.1, 0], columns=['mdot_storage'])
-    datasource = ts.DFData(framedata)    # creating storage unit in the grid, which will be controlled by our controller
+    from simple_storage import get_multimodal_flow
+    num_values = 10
+    x, sourceflow = get_multimodal_flow(num_values, [3, 7], max_flow=0.02)
+    # a bit later we consume it 
+    x, sink_consumption = get_multimodal_flow(num_values, [5, 8], max_flow=0.1)
+    sink_data = pd.DataFrame(sink_consumption, columns = ["mdot_kg_per_s"])
+
+    const_sink = control.ConstControl(net, element='sink', variable='mdot_kg_per_s',
+                                    element_index=net.sink.index.values,
+                                    data_source= ts.DFData(sink_data),
+                                    profile_name="mdot_kg_per_s")
+
+    # just a constant in flow to storage, to see what's going on 
+    constant_storage = [0.05] * num_values
+    # first store then unload - that should show us fewer external grid usage
+    load_then_discharge = [constant_storage[i] if i < num_values/2 else -constant_storage[i] for i in range(num_values)]
+    storage_data = pd.DataFrame(constant_storage, columns=['mdot_storage'])
 
     # creating an Object of our new build storage controller, controlling the storage unit
-    ctrl = StorageController(net=net, sid=0, data_source=datasource, mdot_profile='mdot_storage')
+    ctrl = StorageController(net=net, sid=0, data_source=ts.DFData(storage_data) , mdot_profile='mdot_storage')
 
-    framedata2 = pd.DataFrame([0.1, 0, 0.1, 0, 0.2, 0.1], columns = ["mdot_kg_per_s"])
-    ds_source = ts.DFData(framedata2)
+    x, source_flow_alternative = get_multimodal_flow(num_values, [2], max_flow=0.03) # only at the beginning 
+
+    source_data = pd.DataFrame(sourceflow, columns = ["mdot_kg_per_s"])
     const_source = control.ConstControl(net, element='source', variable='mdot_kg_per_s',
                                     element_index=net.source.index.values,
-                                    data_source=ds_source,
+                                    data_source= ts.DFData(source_data),
                                     profile_name="mdot_kg_per_s")
     
     from pandapipes.timeseries import run_timeseries
     # defining an OutputWriter to track certain variables
     log_variables = [("mass_storage", "mdot_kg_per_s"), ("res_mass_storage", "mdot_kg_per_s"),
                     ("mass_storage", "m_stored_kg"), ("mass_storage", "filling_level_percent"),
-                      ("res_ext_grid", "mdot_kg_per_s"),
-                    ("res_source", "mdot_kg_per_s")] 
+                      ("res_ext_grid", "mdot_kg_per_s"), ("res_source", "mdot_kg_per_s"), ("res_sink", "mdot_kg_per_s")] 
     
     ow = ts.OutputWriter(net, log_variables=log_variables, output_path=None)
 
-    run_simulation(net, ow, True)
-    run_simulation(net, ow, False)
+    #run_simulation(net, ow, True, n_steps=num_values)
+    run_simulation(net, ow, False, n_steps=num_values)

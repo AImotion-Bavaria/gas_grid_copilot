@@ -14,13 +14,14 @@ def get_example_line():
     #create junctions
 
     j = dict()
-    for i in range(0, 3):
+    for i in range(0, 4):
         j[i] = pp.create_junction(net, pn_bar=pn_bar, tfluid_k=norm_temp, name=f"Junction {i}")
 
 
     #create junction elements
     ext_grid = pp.create_ext_grid(net, junction=j[0], p_bar=pn_bar, t_k=293.15, name="Grid Connection 1")
     source = pp.create_source(net, junction=j[1], mdot_kg_per_s=0.2, name="My source")
+    sink = pp.create_sink(net, junction=j[3], mdot_kg_per_s=0.01, name="My sink")
     pp.create_mass_storage(net, junction=j[2], mdot_kg_per_s=0.1, 
                            init_m_stored_kg=2, 
                            min_m_stored_kg=0, max_m_stored_kg=500,
@@ -31,6 +32,7 @@ def get_example_line():
     #create branch elements
     pp.create_pipe_from_parameters(net, from_junction=j[0], to_junction=j[1], length_km = 10, diameter_m=0.4, name="Pipe 0")
     pp.create_pipe_from_parameters(net, from_junction=j[1], to_junction=j[2], length_km = 10, diameter_m=0.4, name="Pipe 1")
+    pp.create_pipe_from_parameters(net, from_junction=j[2], to_junction=j[3], length_km = 20, diameter_m=0.4, name="Pipe 2")
 
     #valve1 = pp.create_valve(net, from_junction=j[1], to_junction=j[3], diameter_m=0.4, opened=True, name="Valve")
     #valve2 = pp.create_valve(net, from_junction=j[2], to_junction=j[4], diameter_m=0.4, opened=True, name="Valve")
@@ -63,9 +65,13 @@ def plot_trajectory(output_dict, reward_trajectory : pd.DataFrame = None):
     mass_df = output_dict["mass_storage.m_stored_kg"]
     ext_grid_flow = output_dict["res_ext_grid.mdot_kg_per_s"]
     source_flow = output_dict["res_source.mdot_kg_per_s"]
+    sink_flow = output_dict["res_sink.mdot_kg_per_s"]
     mass_storage_flow = output_dict["mass_storage.mdot_kg_per_s"]
     mass_df.columns = ['mass_storage']
     
+    # total external grid consumption:
+    ext_grid_flow_total = np.sum(np.abs(ext_grid_flow))
+    print("Consumed from external: ", ext_grid_flow_total)
     
     # Assuming the index of your data frames represents time
     time_index = mass_df.index
@@ -89,6 +95,9 @@ def plot_trajectory(output_dict, reward_trajectory : pd.DataFrame = None):
         axs[1].plot( time_index, mass_storage_flow, color='blue', label = "Mass storage flow")
         axs[1].set_title('Flows')
         axs[1].set_xlabel('Values')
+
+        axs[1].plot( time_index, sink_flow, label = "Sink flow")
+        axs[1].set_xlabel('Values')
         axs[1].legend()
     else:
         fig, axs = plt.subplots(2, 2, figsize=(15, 8))
@@ -107,6 +116,9 @@ def plot_trajectory(output_dict, reward_trajectory : pd.DataFrame = None):
 
         axs[0, 1].plot( time_index, mass_storage_flow, color='blue', label = "Mass storage flow")
         axs[0, 1].set_title('Flows')
+        axs[0, 1].set_xlabel('Values')
+
+        axs[0, 1].plot( time_index, sink_flow, label = "Sink flow")
         axs[0, 1].set_xlabel('Values')
         axs[0, 1].legend()
 
