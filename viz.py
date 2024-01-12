@@ -36,12 +36,12 @@ junction_source_collection = plot.create_junction_collection(net, junctions=[2],
 junction_valve_collection = plot.create_junction_collection(net, junctions=[4, 5], patch_type="rect",size=0.1, color="red", zorder=200)
 
 # create additional pipe collection
-pipe_collection = plot.create_pipe_collection(net, pipes=[3,4], linewidths=3., zorder=100)
+pipe_collection = plot.create_pipe_collection(net, pipes=[3,4], linewidths=1., zorder=100)
 # plot network
-# plot.simple_plot(net, plot_sinks=True, plot_sources=True, sink_size=4.0, source_size=4.0)
+plot.simple_plot(net, plot_sinks=True, plot_sources=True, sink_size=4.0, source_size=4.0)
 # # plot collections of junctions and pipes
-# plot.draw_collections([junction_sink_collection, junction_source_collection, junction_valve_collection, pipe_collection],  figsize=(8,6))
-# plt.show()
+plot.draw_collections([junction_sink_collection, junction_source_collection, junction_valve_collection, pipe_collection],  figsize=(8,6))
+plt.show()
 
 # # create a list of simple collections
 simple_collections = plot.create_simple_collections(net, as_dict=False)

@@ -4,7 +4,7 @@ from gymnasium import spaces
 
 import pandapipes as pp 
 import pandas as pd
-from simple_storage import get_example_line, plot_trajectory, get_multimodal_flow
+from simple_storage import get_example_line, plot_trajectory, get_multigaussian_flow
 from storage_controller import StorageController
 
 import pandapipes as pp
@@ -19,8 +19,10 @@ import os
 from pandapipes.networks import gas_meshed_square
 
 from timeseries_wrapper import TimeseriesWrapper
-
+from viz_step_by_step import plot_gas_network, get_network_image
 from stable_baselines3 import PPO, SAC
+import torch as th
+import pickle
 
 def storage_reward(x):
     if 0 <= x < 0.25:
@@ -112,7 +114,7 @@ class SimpleGasStorageEnv(gym.Env):
         ctrl = StorageController(net=self.net, sid=0, data_source=datasource_storage_flow, mdot_profile='mdot_storage')
         self.storage_flow_df = storage_flow_df
 
-        _, source_flow = get_multimodal_flow(SimpleGasStorageEnv.MAX_TIME_STEPS, [2, 6], 0.04)
+        _, source_flow = get_multigaussian_flow(SimpleGasStorageEnv.MAX_TIME_STEPS, [2, 6], 0.04)
         source_in_flow_df = pd.DataFrame(source_flow, columns = ["mdot_kg_per_s"])
         const_source = control.ConstControl(self.net, element='source', variable='mdot_kg_per_s',
                                         element_index=self.net.source.index.values,
@@ -120,7 +122,7 @@ class SimpleGasStorageEnv(gym.Env):
                                         profile_name="mdot_kg_per_s")
         
         # a bit delayed will be the consumption
-        _, sink_flow = get_multimodal_flow(SimpleGasStorageEnv.MAX_TIME_STEPS, [4, 8], 0.03)
+        _, sink_flow = get_multigaussian_flow(SimpleGasStorageEnv.MAX_TIME_STEPS, [4, 8], 0.03)
         sink_out_flow_df = pd.DataFrame(sink_flow, columns = ["mdot_kg_per_s"])
         const_sink = control.ConstControl(self.net, element='sink', variable='mdot_kg_per_s',
                                         element_index=self.net.sink.index.values,
@@ -207,7 +209,7 @@ class SimpleGasStorageEnv(gym.Env):
         return self.__get_obs(), info
 
     def render(self):
-        pass
+        return get_network_image(self.net)
 
     def close(self):
         pass
@@ -248,30 +250,53 @@ def train_SB_Agent(env, algorithm=PPO, force_retraining = False):
 
     if (not os.path.exists(model_full_path)) or force_retraining:
         model = algorithm("MlpPolicy", env, verbose=1)
-        model.learn(total_timesteps=10000)
+        model.learn(total_timesteps=10000) # p(s,a,s') is not known!z
         model.save(model_full_path)
     else: 
         model = algorithm.load(model_full_path)
     return model
 
 
-def run_trajectory(env, agent):
+def run_trajectory(env, agent, info_processor = None):
     reward_trajectory = []
     reward_cols = None
     observation, info = env.reset()
 
+    imgs = []
     for i in range(0, 10):
         print(f"*** Starting step {i}")
         action, _states = agent.predict(observation)
         observation, reward, terminated, truncated, info = env.step(action)
         print(f"* Reward: {reward}, Observation: {observation}, Rewards: {info['rewards']}")
+        if hasattr(agent, "critic"):
+            print("Has critic")
+            # what would I pick in the current state
+            action, _states = agent.predict(observation)
+            info["q_value"] = agent.critic.q1_forward(th.tensor(observation.reshape(1,-1)), th.tensor(action.reshape(-1,1)))
         reward_trajectory.append([ val for key, val in info["rewards"]])
         if reward_cols is None:
             reward_cols = [key for key, val in info["rewards"]]
+        imgs.append(env.render())
 
     reward_trajectory = pd.DataFrame(reward_trajectory, columns = reward_cols)
     reward_trajectory['total_reward'] = reward_trajectory.sum(axis=1)
     plot_trajectory(env.get_output_dict(), reward_trajectory)
+    # write images to pickled files
+    
+    # open a file, where you ant to store the data
+    imgs_file_name = f"{agent.__class__.__name__}_trajectory.pickle"
+    imgs_file_name = os.path.join(os.path.dirname(os.path.abspath(__file__)), imgs_file_name)
+    # using with statement
+    with open(imgs_file_name, 'wb') as file:
+        pickle.dump(imgs, file)
+
+    # also save the reward trajectory and output dict
+    data_file_name = f"{agent.__class__.__name__}_trajectory_data.pickle"
+    data_file_name = os.path.join(os.path.dirname(os.path.abspath(__file__)), data_file_name)
+    with open(data_file_name, 'wb') as file:
+        pickle.dump((env.get_output_dict(), reward_trajectory), file)
+
+    return reward_trajectory, imgs
 
 if __name__ == "__main__":
     env = SimpleGasStorageEnv(get_example_line)
@@ -282,9 +307,13 @@ if __name__ == "__main__":
     # just dummy rotating inflows
     inflows = [SimpleGasStorageEnv.MAX_STORAGE_MDOT_KG_PER_S, 0., SimpleGasStorageEnv.MIN_STORAGE_MDOT_KG_PER_S/2]
     fixed_dummy = FixedDummyAgent(inflows)
-    run_trajectory(env, fixed_dummy)
+    #run_trajectory(env, fixed_dummy)
 
     # train our very first agent to maximize the rewards
-    trained_agent = train_SB_Agent(env, algorithm=SAC, force_retraining=True)
-    run_trajectory(env, trained_agent)
+    trained_agent = train_SB_Agent(env, algorithm=SAC, force_retraining=False)
+
+    rewards, imgs = run_trajectory(env, trained_agent)
+    
+    from stable_baselines3.common.policies import ContinuousCritic
+
     

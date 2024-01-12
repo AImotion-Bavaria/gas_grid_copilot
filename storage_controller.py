@@ -142,11 +142,11 @@ if __name__ == "__main__":
 
     # creating a simple time series
     # -> that is what I would actually like to see controlled
-    from simple_storage import get_multimodal_flow
+    from simple_storage import get_multigaussian_flow
     num_values = 10
-    x, sourceflow = get_multimodal_flow(num_values, [3, 7], max_flow=0.02)
+    x, sourceflow = get_multigaussian_flow(num_values, [3, 7], max_flow=0.02)
     # a bit later we consume it 
-    x, sink_consumption = get_multimodal_flow(num_values, [5, 8], max_flow=0.1)
+    x, sink_consumption = get_multigaussian_flow(num_values, [5, 8], max_flow=0.1)
     sink_data = pd.DataFrame(sink_consumption, columns = ["mdot_kg_per_s"])
 
     const_sink = control.ConstControl(net, element='sink', variable='mdot_kg_per_s',
@@ -163,7 +163,7 @@ if __name__ == "__main__":
     # creating an Object of our new build storage controller, controlling the storage unit
     ctrl = StorageController(net=net, sid=0, data_source=ts.DFData(storage_data) , mdot_profile='mdot_storage')
 
-    x, source_flow_alternative = get_multimodal_flow(num_values, [2], max_flow=0.03) # only at the beginning 
+    x, source_flow_alternative = get_multigaussian_flow(num_values, [2], max_flow=0.03) # only at the beginning 
 
     source_data = pd.DataFrame(sourceflow, columns = ["mdot_kg_per_s"])
     const_source = control.ConstControl(net, element='source', variable='mdot_kg_per_s',

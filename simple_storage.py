@@ -12,12 +12,11 @@ def get_example_line():
     norm_temp = 293.15 # in K, would be 20° C
 
     #create junctions
-
+    geodata = [(0,0), (1,0), (2,0), (4,0)] 
     j = dict()
     for i in range(0, 4):
-        j[i] = pp.create_junction(net, pn_bar=pn_bar, tfluid_k=norm_temp, name=f"Junction {i}")
-
-
+        j[i] = pp.create_junction(net, pn_bar=pn_bar, tfluid_k=norm_temp, name=f"Junction {i}", geodata=geodata[i])
+        
     #create junction elements
     ext_grid = pp.create_ext_grid(net, junction=j[0], p_bar=pn_bar, t_k=293.15, name="Grid Connection 1")
     source = pp.create_source(net, junction=j[1], mdot_kg_per_s=0.2, name="My source")
@@ -27,12 +26,15 @@ def get_example_line():
                            min_m_stored_kg=0, max_m_stored_kg=500,
                            name = "Test Storage",
                            type="Classical mass storage")
-
+    mass_storage = net.mass_storage.loc[0]
+    net.mass_storage.at[0, "filling_level_percent"] = mass_storage["init_m_stored_kg"] / mass_storage["max_m_stored_kg"]
+    net.mass_storage.at[0, "m_stored_kg"] = mass_storage["init_m_stored_kg"]
     # now for the actual pipes?
     #create branch elements
-    pp.create_pipe_from_parameters(net, from_junction=j[0], to_junction=j[1], length_km = 10, diameter_m=0.4, name="Pipe 0")
-    pp.create_pipe_from_parameters(net, from_junction=j[1], to_junction=j[2], length_km = 10, diameter_m=0.4, name="Pipe 1")
-    pp.create_pipe_from_parameters(net, from_junction=j[2], to_junction=j[3], length_km = 20, diameter_m=0.4, name="Pipe 2")
+    #pp.create_pipe_from_parameters(net, from_junction=j[0], to_junction=j[1], length_km = 10, diameter_m=0.4, name="Pipe 0", geodata=[(0,0), (.3,0), (.3, .5), (.6, .5), (.6, 0), (1,0)])
+    pp.create_pipe_from_parameters(net, from_junction=j[0], to_junction=j[1], length_km = 10, diameter_m=0.4, name="Pipe 0", geodata=[(0,0), (1,0)])
+    pp.create_pipe_from_parameters(net, from_junction=j[1], to_junction=j[2], length_km = 10, diameter_m=0.4, name="Pipe 1", geodata=[(1,0), (2,0)])
+    pp.create_pipe_from_parameters(net, from_junction=j[2], to_junction=j[3], length_km = 20, diameter_m=0.4, name="Pipe 2", geodata=[(2,0), (4,0)])
 
     #valve1 = pp.create_valve(net, from_junction=j[1], to_junction=j[3], diameter_m=0.4, opened=True, name="Valve")
     #valve2 = pp.create_valve(net, from_junction=j[2], to_junction=j[4], diameter_m=0.4, opened=True, name="Valve")
@@ -42,7 +44,7 @@ def get_example_line():
     # now for some of the results:
     return net
 
-def get_multimodal_flow(num_values, modes : list, max_flow : float):
+def get_multigaussian_flow(num_values, modes : list, max_flow : float):
     # Generate an array with 10 values between 0 and 10
     x = np.linspace(0, num_values, num_values)
 
@@ -61,6 +63,50 @@ def plot_flow(x, y):
     plt.ylabel('Value')
     plt.show()
 
+def plot_storage(output_dict, ax):
+    mass_df = output_dict["mass_storage.m_stored_kg"]
+    mass_df.columns = ['mass_storage']
+    
+    # Assuming the index of your data frames represents time
+    time_index = mass_df.index
+
+    ax.plot(time_index, mass_df, color='blue')
+    ax.fill_between(time_index, 0, mass_df["mass_storage"], alpha=0.2)
+    ax.set_title('Mass Storage')
+    ax.set_xlabel('Values')
+    ax.set_ylabel('Time')
+
+def plot_flows(output_dict, ax):
+    mass_df = output_dict["mass_storage.m_stored_kg"]
+    ext_grid_flow = output_dict["res_ext_grid.mdot_kg_per_s"]
+    source_flow = output_dict["res_source.mdot_kg_per_s"]
+    sink_flow = output_dict["res_sink.mdot_kg_per_s"]
+    mass_storage_flow = output_dict["mass_storage.mdot_kg_per_s"]
+    mass_df.columns = ['mass_storage']
+    
+    # Assuming the index of your data frames represents time
+    time_index = mass_df.index
+    ax.plot(time_index, ext_grid_flow,  color='green', label ="Ext grid flow")
+    ax.set_xlabel('Values')
+
+    ax.plot( time_index, source_flow, color='red', label = "Source flow")
+    ax.set_xlabel('Values')
+    ax.legend()
+
+    ax.plot( time_index, mass_storage_flow, color='blue', label = "Mass storage flow")
+    ax.set_title('Flows')
+    ax.set_xlabel('Values')
+
+    ax.plot( time_index, sink_flow, label = "Sink flow")
+    ax.set_xlabel('Values')
+    ax.legend()
+   
+def plot_reward_trajectory( reward_trajectory : pd.DataFrame, ax):
+    reward_trajectory.plot(ax=ax) 
+   
+    # Sum values for each column
+    reward_sums = reward_trajectory.sum()
+        
 def plot_trajectory(output_dict, reward_trajectory : pd.DataFrame = None):
     mass_df = output_dict["mass_storage.m_stored_kg"]
     ext_grid_flow = output_dict["res_ext_grid.mdot_kg_per_s"]
