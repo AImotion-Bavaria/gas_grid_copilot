@@ -21,7 +21,7 @@ def get_example_line():
     ext_grid = pp.create_ext_grid(net, junction=j[0], p_bar=pn_bar, t_k=293.15, name="Grid Connection 1")
     source = pp.create_source(net, junction=j[1], mdot_kg_per_s=0.2, name="My source")
     sink = pp.create_sink(net, junction=j[3], mdot_kg_per_s=0.01, name="My sink")
-    pp.create_mass_storage(net, junction=j[2], mdot_kg_per_s=0.1, 
+    pp.create_mass_storage(net, junction=j[2], mdot_kg_per_s=0.05, 
                            init_m_stored_kg=2, 
                            min_m_stored_kg=0, max_m_stored_kg=500,
                            name = "Test Storage",
@@ -70,11 +70,13 @@ def plot_storage(output_dict, ax):
     # Assuming the index of your data frames represents time
     time_index = mass_df.index
 
-    ax.plot(time_index, mass_df, color='blue')
-    ax.fill_between(time_index, 0, mass_df["mass_storage"], alpha=0.2)
+    storage_plot, = ax.plot(time_index, mass_df, color='royalblue')
+    filler = ax.fill_between(time_index, 0, mass_df["mass_storage"],color="royalblue", alpha=0.2)
     ax.set_title('Mass Storage')
-    ax.set_xlabel('Values')
-    ax.set_ylabel('Time')
+    ax.set_xlabel('Time')
+    ax.set_ylabel('kg')
+    ax.set_ylim((0, 500.0))
+    return storage_plot, filler
 
 def plot_flows(output_dict, ax):
     mass_df = output_dict["mass_storage.m_stored_kg"]
@@ -87,23 +89,28 @@ def plot_flows(output_dict, ax):
     # Assuming the index of your data frames represents time
     time_index = mass_df.index
     ax.plot(time_index, ext_grid_flow,  color='green', label ="Ext grid flow")
-    ax.set_xlabel('Values')
+    ax.set_xlabel('Time')
 
     ax.plot( time_index, source_flow, color='red', label = "Source flow")
-    ax.set_xlabel('Values')
+    ax.set_xlabel('Time')
     ax.legend()
 
     ax.plot( time_index, mass_storage_flow, color='blue', label = "Mass storage flow")
     ax.set_title('Flows')
-    ax.set_xlabel('Values')
+    ax.set_xlabel('Time')
 
     ax.plot( time_index, sink_flow, label = "Sink flow")
-    ax.set_xlabel('Values')
+    ax.set_xlabel('Time')
+    ax.set_ylabel("kg / s")
     ax.legend()
+    ax.set_ylim((-0.05, 0.05))
    
 def plot_reward_trajectory( reward_trajectory : pd.DataFrame, ax):
     reward_trajectory.plot(ax=ax) 
-   
+    ax.set_ylabel("Rewards in [0,1]")
+    ax.set_xlabel("Time")
+    ax.set_title("Rewards")
+    ax.set_ylim((0, 3.0))
     # Sum values for each column
     reward_sums = reward_trajectory.sum()
         
