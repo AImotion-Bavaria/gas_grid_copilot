@@ -10,7 +10,7 @@ import numpy as np
 
 
 def prepare_trained_models(env):
-    steps = [1.] # [1., 10., 100.]
+    steps = [1., 10., 100.]
     plot_data_dict = dict() 
     for r1 in steps:
         for r2 in steps:
@@ -18,7 +18,7 @@ def prepare_trained_models(env):
                 env.reward_weights = np.array([r1, r2, r3])
                 env.reward_weights /= np.sum(env.reward_weights)
                 model_file_name = f"cached_models/SAC_{int(r1)}_{int(r2)}_{int(r3)}.zip"
-                agent = train_SB_Agent(env, algorithm=SAC, force_retraining=True, total_timesteps= 10000, model_file_name = model_file_name)
+                agent = train_SB_Agent(env, algorithm=SAC, force_retraining=False, total_timesteps= 10000, model_file_name = model_file_name)
 
                 rewards, imgs = simulate_trained_policy(env, agent)
                 plot_data_dict[(int(r1), int(r2), int(r3))] = (imgs, env.get_output_dict(), rewards)
@@ -43,16 +43,16 @@ if __name__ == "__main__":
     plot_data_name = f"cached_models/prepared_plot_data.pickle"
     plot_data_name = os.path.join(os.path.dirname(os.path.abspath(__file__)), plot_data_name)
     # # using with statement
-    # with open(plot_data_name, 'wb') as file:
-    #     pickle.dump(plot_data, file)
+    with open(plot_data_name, 'wb') as file:
+         pickle.dump(plot_data, file)
 
     #rewards, imgs = run_trajectory(env, trained_agent)
     # load prepared data 
-    #with open(plot_data_name, 'rb') as file:
-    #     plot_data = pickle.load(file)
+    with open(plot_data_name, 'rb') as file:
+         plot_data = pickle.load(file)
         
-    imgs, obs_dict, rewards = plot_data[(1,1,1)]
+    #imgs, obs_dict, rewards = plot_data[(1,1,1)]
 
-    demo_plot = IKIGasDemoPlot()
-    demo_plot.image_plot(imgs, obs_dict, rewards, plot_data)
-    plt.show()
+    #demo_plot = IKIGasDemoPlot()
+    #demo_plot.image_plot(imgs, obs_dict, rewards, plot_data)
+    #plt.show()

@@ -24,6 +24,7 @@ from stable_baselines3 import PPO, SAC
 import torch as th
 from sklearn.preprocessing import MinMaxScaler
 import pickle
+device = th.device("cuda:0" if th.cuda.is_available() else "cpu")
 
 def storage_reward(x):
     if 0 <= x < 0.25:
@@ -390,7 +391,11 @@ def simulate_trained_policy(env, agent):
             action, _states = agent.predict(observation)
             # watch out, action might be rescaled due to normalization here
             action = env.rescale_action(action)
-            info["q_value"] = agent.critic.q1_forward(th.tensor(observation.reshape(1,-1)), th.tensor(action.reshape(-1,1)))
+            observation_tensor = th.tensor(observation.reshape(1,-1)).to(device)
+            action_tensor = th.tensor(action.reshape(-1,1)).to(device)
+            # if we're training on GPU, we should move the tensor to GPU as well
+            
+            info["q_value"] = agent.critic.q1_forward(observation_tensor, action_tensor)
 
         reward_trajectory.append([ val for key, val in info["rewards"]])
         if reward_cols is None:

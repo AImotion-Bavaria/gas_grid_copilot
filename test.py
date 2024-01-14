@@ -1,14 +1,16 @@
-from sklearn.preprocessing import MinMaxScaler
+import matplotlib.pyplot as plt
 
-# Your known minimal and maximal values
-min_value = 10
-max_value = 50
+fig, ax = plt.subplots()
 
-# Instantiate MinMaxScaler with specified feature_range
-custom_scaler = MinMaxScaler(feature_range=(min_value, max_value))
+fruits = ['apple', 'blueberry', 'cherry', 'orange']
+counts = [40, 100, 30, 55]
+bar_labels = ['red', 'blue', '_red', 'orange']
+bar_colors = ['tab:red', 'tab:blue', 'tab:red', 'tab:orange']
 
-# Now, you can use this custom_scaler to transform new data without fitting
-new_data = [[15], [25], [35]]
-scaled_data = custom_scaler.transform(new_data)
+ax.bar(fruits, counts, label=bar_labels, color=bar_colors)
 
-print(scaled_data)
+ax.set_ylabel('fruit supply')
+ax.set_title('Fruit supply by kind and color')
+ax.legend(title='Fruit color')
+
+plt.show()
