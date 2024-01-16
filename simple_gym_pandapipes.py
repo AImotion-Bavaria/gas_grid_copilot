@@ -153,7 +153,7 @@ class SimpleGasStorageEnv(gym.Env):
         
         self.ow = ts.OutputWriter(self.net, log_variables=log_variables, output_path=None)
         self.timeseries_wrapper = TimeseriesWrapper(self.net, self.ow, log_variables, self._verbose)
-
+    
     def __get_obs(self, init=True):
         """
             observations = {
@@ -380,6 +380,7 @@ def simulate_trained_policy(env, agent):
     observation, info = env.reset()
 
     imgs = []
+    q_vals = []
     for i in range(0, 10):
         print(f"*** Starting step {i}")
         action, _states = agent.predict(observation)
@@ -395,7 +396,7 @@ def simulate_trained_policy(env, agent):
             action_tensor = th.tensor(action.reshape(-1,1)).to(device)
             # if we're training on GPU, we should move the tensor to GPU as well
             
-            info["q_value"] = agent.critic.q1_forward(observation_tensor, action_tensor)
+            q_vals.append(agent.critic.q1_forward(observation_tensor, action_tensor))
 
         reward_trajectory.append([ val for key, val in info["rewards"]])
         if reward_cols is None:
@@ -404,7 +405,7 @@ def simulate_trained_policy(env, agent):
 
     reward_trajectory = pd.DataFrame(reward_trajectory, columns = reward_cols)
     reward_trajectory['total_reward'] = reward_trajectory.sum(axis=1)
-    return reward_trajectory, imgs
+    return reward_trajectory, imgs, q_vals
 
 def run_trajectory(env, agent):
     reward_trajectory, imgs = simulate_trained_policy(env, agent)

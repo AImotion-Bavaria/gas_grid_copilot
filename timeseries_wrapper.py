@@ -42,4 +42,4 @@ class TimeseriesWrapper:
                 self.output[key] = self.output_writer.output[key]
             else: 
                 self.output[key] = pd.concat( [self.output[key], self.output_writer.output[key]], ignore_index=True)
-        pass
+        
