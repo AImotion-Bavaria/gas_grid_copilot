@@ -8,7 +8,8 @@ from stable_baselines3 import PPO, SAC
 from viz4 import IKIGasDemoPlot
 import blosc
 import numpy as np
-
+import pandas as pd
+import seaborn as sns 
 
 def prepare_trained_models(env, algo=SAC):
     steps = [1., 10., 100.]
@@ -25,6 +26,14 @@ def prepare_trained_models(env, algo=SAC):
                 plot_data_dict[(int(r1), int(r2), int(r3))] = (imgs, env.get_output_dict(), rewards, q_vals)
     return plot_data_dict
 
+def combine_reward_trajectories(plot_data):
+    # essentially just build a pandas data frame with all the rewards as columns and the states as rows
+    reward_dfs = []
+    for imgs, obs_dict, rewards, q_vals in plot_data.values():
+        reward_dfs.append(rewards)
+    reward_df = pd.concat( reward_dfs, ignore_index=True)
+    return reward_df
+
 import matplotlib.pyplot as plt
 import os 
 import pickle
@@ -34,34 +43,43 @@ if __name__ == "__main__":
     obs, info = env.reset()
     print(obs)
 
-    algo = PPO
-    # just a dummy agent alway wanting the maximal inflow
-    # just dummy rotating inflows
-    inflows = [SimpleGasStorageEnv.MAX_STORAGE_MDOT_KG_PER_S, 0., SimpleGasStorageEnv.MIN_STORAGE_MDOT_KG_PER_S/2]
-    fixed_dummy = FixedDummyAgent(inflows)
-    #run_trajectory(env, fixed_dummy)
-    for algo in [PPO, SAC]:
-        plot_data = prepare_trained_models(env, algo)
-    
+    prepare = False
+    if prepare:
+        algo = PPO
+        # just a dummy agent alway wanting the maximal inflow
+        # just dummy rotating inflows
+        inflows = [SimpleGasStorageEnv.MAX_STORAGE_MDOT_KG_PER_S, 0., SimpleGasStorageEnv.MIN_STORAGE_MDOT_KG_PER_S/2]
+        fixed_dummy = FixedDummyAgent(inflows)
+        #run_trajectory(env, fixed_dummy)
+        for algo in [PPO, SAC]:
+            plot_data = prepare_trained_models(env, algo)
+        
+            plot_data_name = f"cached_models/{algo.__name__}_prepared_plot_data.pickle"
+            plot_data_name = os.path.join(os.path.dirname(os.path.abspath(__file__)), plot_data_name)
+            # # using with statement
+            pickled_data = pickle.dumps(plot_data)  # returns data as a bytes object
+            compressed_pickle = blosc.compress(pickled_data)
+
+            with open(plot_data_name, 'wb') as file:
+                #pickle.dump(plot_data, file)
+                file.write(compressed_pickle)
+    else:
+        # load prepared data 
+        algo = PPO
+ 
         plot_data_name = f"cached_models/{algo.__name__}_prepared_plot_data.pickle"
-        plot_data_name = os.path.join(os.path.dirname(os.path.abspath(__file__)), plot_data_name)
-        # # using with statement
-        pickled_data = pickle.dumps(plot_data)  # returns data as a bytes object
-        compressed_pickle = blosc.compress(pickled_data)
+        import os
+        plot_data_name = os.path.join(os.path.dirname(__file__), plot_data_name)
+        with open(plot_data_name, 'rb') as file:
+            compressed_pickle = file.read()
+        depressed_pickle = blosc.decompress(compressed_pickle)
+        plot_data = pickle.loads(depressed_pickle)  # turn bytes object back into data
 
-        with open(plot_data_name, 'wb') as file:
-            #pickle.dump(plot_data, file)
-            file.write(compressed_pickle)
-            
+        # calculate interaction matrix using plot_data
+        all_reward_trajectories = combine_reward_trajectories(plot_data)
+ 
+        imgs, obs_dict, rewards, q_vals = plot_data[(1,1,1)]
 
-    #rewards, imgs = run_trajectory(env, trained_agent)
-    # load prepared data 
-    with open(plot_data_name, 'rb') as file:
-         compressed_pickle = file.read()
-    depressed_pickle = blosc.decompress(compressed_pickle)
-    plot_data = pickle.loads(depressed_pickle)  # turn bytes object back into data
-    #imgs, obs_dict, rewards = plot_data[(1,1,1)]
-
-    #demo_plot = IKIGasDemoPlot()
-    #demo_plot.image_plot(imgs, obs_dict, rewards, plot_data)
-    #plt.show()
+        demo_plot = IKIGasDemoPlot()
+        demo_plot.image_plot(imgs, obs_dict, rewards, plot_data=plot_data, q_vals=q_vals, all_reward_trajectories=all_reward_trajectories)
+        plt.show()

@@ -5,15 +5,20 @@ from matplotlib.widgets import Button, Slider, RadioButtons
 import matplotlib as mpl
 import matplotlib.style as mplstyle
 from matplotlib.gridspec import GridSpec
+import seaborn as sns
 import os 
+import pandas as pd
 
-from simple_storage import plot_flows, plot_storage, plot_reward_trajectory
+from simple_storage import plot_flows, plot_storage, plot_reward_trajectory, plot_quality
 
 class IKIGasDemoPlot:
     def __init__(self) -> None:
         pass
 
-    def image_plot(self, imgs, output_dict, reward_trajectory, plot_data : dict = None):
+    def image_plot(self, imgs, output_dict, reward_trajectory, 
+                   q_vals = None, 
+                   plot_data : dict = None, 
+                   all_reward_trajectories : pd.DataFrame = None):
         mplstyle.use('fast')
         mpl.rcParams['path.simplify_threshold'] = 1.0
         mpl.rcParams['path.simplify'] = True
@@ -32,35 +37,50 @@ class IKIGasDemoPlot:
 
         ikigas_logo = os.path.join(os.path.dirname(__file__), 'ikigas.png')
         im = image.imread(ikigas_logo)
+        self.time_index = 5
+        if q_vals:
+            self.q_vals = [q_val.detach().numpy() for q_val in q_vals]
+            q_vals = self.q_vals
+        else:
+            self.q_vals = q_vals
 
         imax = ax4
         # remove ticks & the box from imax 
         imax.set_axis_off()
-        self.plt_image = imax.imshow(imgs[5], aspect="equal")
+        self.plt_image = imax.imshow(imgs[self.time_index], aspect="equal")
 
         # adjust the main plot to make room for the sliders
         plt.tight_layout()
         fig.subplots_adjust(top = 0.85, left = .06)
 
         axtime = fig.add_axes([0.25, 0.9, 0.65, 0.03])
+
         time_slider = Slider(
             ax=axtime,
             label='Time steps',
             valmin=0,
             valmax=len(imgs),
-            valinit=5,
+            valinit=self.time_index,
             valfmt='%0.0f',
             valstep=range(0,len(imgs))
         )
 
         # now the reward sliders 
         start_rewards = 0.15
+
+        # q values 
+        plt.gcf().text(0.55, start_rewards+0.05, "Current Q value (grid state)", fontsize=15, weight="bold")
+        self.__axq_values = fig.add_axes([0.55,  0.04, 0.12, 0.12])
+        if self.q_vals:
+            self.q_plot, self.q_plot_cbar_marker, self.q_plot_cbar =  plot_quality(self.__axq_values , min_quality= np.min(q_vals).item(), max_quality=np.max(q_vals).item(), curr_quality=q_vals[self.time_index].item())
+        else:
+            self.q_plot, self.q_plot_cbar_marker, self.q_plot_cbar = plot_quality(self.__axq_values )
+
         
         axreward_storage = fig.add_axes([0.15,  start_rewards, 0.2, 0.03])
         plt.gcf().text(0.15, start_rewards+0.05, "Reward priorities", fontsize=15, weight="bold")
         axreward_mass_flow = fig.add_axes([0.15, start_rewards - 0.05, 0.2, 0.03])
         axreward_difference = fig.add_axes([0.15, start_rewards - 0.1 , 0.2, 0.03])
-
         # [left, bottom, width, height] 
         reward_storage_slider = Slider(
             ax=axreward_storage,
@@ -96,10 +116,21 @@ class IKIGasDemoPlot:
         plot_flows(output_dict, ax1)
         self.storage_plot, self.storage_filler = plot_storage(output_dict, ax2)
         plot_reward_trajectory(reward_trajectory, ax3)
+        self.reward_trajectory = reward_trajectory
+        self.all_reward_trajectories = all_reward_trajectories
+
+        # below we want to see the conflict interaction matrix
+        axinteractionbutton = fig.add_axes([0.7, 0.55, 0.2, 0.03])
+        interaction = Button(axinteractionbutton, 'Show model reward interactions')
+        interaction.on_clicked(lambda val : self.show_interaction_matrix(self.reward_trajectory, "Reward interactions (over this model's traces)"))
+
+        axallinteractionbutton = fig.add_axes([0.45, 0.55, 0.2, 0.03])     
+        allinteraction = Button(axallinteractionbutton, 'Show all reward interactions')
+        allinteraction.on_clicked(lambda val : self.show_interaction_matrix(self.all_reward_trajectories, "Reward interactions (over all traces)"))
 
         # Create the Vertical lines on the histogram
-        time_lines = [ax_.axvline(5, color='darkred') for ax_ in [ax1, ax2, ax3]]
-        time_slider.on_changed(lambda t : self.update_plot(t, imgs[t], time_lines ) )
+        self.time_lines = [ax_.axvline(5, color='darkred') for ax_ in [ax1, ax2, ax3]]
+        time_slider.on_changed(lambda t : self.update_plot(t, imgs[t] ) )
         time_slider.set_val(5)
 
         # all reward handlers
@@ -113,13 +144,31 @@ class IKIGasDemoPlot:
         imax.imshow(im, aspect="equal")
         plt.show()
 
-    def update_plot(self, time_index, grid_image, time_lines):
+    def show_interaction_matrix(self, interaction_matrix, title):
+        plt.figure()
+        corr = interaction_matrix.corr()
+        ax = sns.heatmap(corr, 
+            xticklabels=corr.columns.values,
+            yticklabels=corr.columns.values,
+            cmap=sns.diverging_palette(10, 133, n=256, as_cmap=True))
+        plt.title(title)
+        #ax.set_aspect("auto")
+        plt.tight_layout()
+        plt.show()
+    
+    def update_plot(self, time_index, grid_image):
         self.time_index = time_index
         self.plt_image.set_data(grid_image)
-        for tl in time_lines:
+
+        if self.q_vals:
+            next_q_value = self.q_vals[time_index].item() 
+            self.q_plot.set_data (np.array([[next_q_value]]))  
+            self.q_plot_cbar_marker.set_data([[next_q_value, next_q_value], [0, 1]])
+
+        for tl in self.time_lines:
             tl.set_xdata([time_index])
 
-    def update_data(self, imgs, output_dict, reward_trajectory):
+    def update_data(self, imgs, output_dict, reward_trajectory, q_vals):
         print("Here: ")
         
         self.storage_plot.set_ydata(output_dict["mass_storage.m_stored_kg"])
@@ -133,15 +182,30 @@ class IKIGasDemoPlot:
         ax3 = self.axes[2]
         ax3.clear()
         plot_reward_trajectory(reward_trajectory, ax3)
+        self.reward_trajectory = reward_trajectory
 
         # the flows 
         ax1 = self.axes[0]
         ax1.clear()
         plot_flows(output_dict, ax1)
         
+        # the time lines 
+        for tl in self.time_lines:
+            tl.remove()
+
+        self.time_lines = [ax_.axvline(self.time_index, color='darkred') for ax_ in [self.axes[i] for i in [0, 1, 2]]]
+
         # the images
         self.imgs = imgs
         self.plt_image.set_data(imgs[self.time_index])
+
+        # the q_values 
+        self.q_vals = [q_val.detach().numpy() for q_val in q_vals]
+        q_vals = self.q_vals
+        self.q_plot_cbar.remove()
+        self.__axq_values.clear()
+        self.q_plot, self.q_plot_cbar_marker, self.q_plot_cbar =  plot_quality(self.__axq_values , min_quality= np.min(q_vals).item(), max_quality=np.max(q_vals).item(), curr_quality=q_vals[self.time_index].item())
+      
 
 import pickle
 if __name__ == "__main__":   

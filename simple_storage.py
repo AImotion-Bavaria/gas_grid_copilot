@@ -76,6 +76,8 @@ def plot_storage(output_dict, ax):
     ax.set_xlabel('Time')
     ax.set_ylabel('kg')
     ax.set_ylim((0, 500.0))
+    ax.axhline(y=0.25*500.0, color='gray', linestyle='--', linewidth=0.5)
+    ax.axhline(y=0.75*500.0, color='gray', linestyle='--', linewidth=0.5)
     return storage_plot, filler
 
 def plot_flows(output_dict, ax):
@@ -88,32 +90,64 @@ def plot_flows(output_dict, ax):
     
     # Assuming the index of your data frames represents time
     time_index = mass_df.index
-    ax.plot(time_index, ext_grid_flow,  color='green', label ="Ext grid flow")
+    ax.plot(time_index, ext_grid_flow,  color='red', label ="Ext grid flow")
     ax.set_xlabel('Time')
 
-    ax.plot( time_index, source_flow, color='red', label = "Source flow")
+    ax.plot( time_index, source_flow, color='green', label = "Source flow")
     ax.set_xlabel('Time')
     ax.legend()
 
-    ax.plot( time_index, mass_storage_flow, color='blue', label = "Mass storage flow")
+    ax.plot( time_index, mass_storage_flow, color='blueviolet', label = "Mass storage flow")
     ax.set_title('Flows')
     ax.set_xlabel('Time')
 
-    ax.plot( time_index, sink_flow, label = "Sink flow")
+    ax.plot( time_index, sink_flow, color ="darkorange", label = "Sink flow")
     ax.set_xlabel('Time')
     ax.set_ylabel("kg / s")
     ax.legend()
     ax.set_ylim((-0.05, 0.05))
    
 def plot_reward_trajectory( reward_trajectory : pd.DataFrame, ax):
-    reward_trajectory.plot(ax=ax) 
+    cols = ['reward_storage', 'reward_mass_flow', 'reward_difference', "total_reward"]
+    colors = ['royalblue', 'red', 'blueviolet', "gold"]
+    #df = pd.DataFrame(columns=cols, data=[[0, 1, 2], [0, 1, 2], [0, 1, 3]])
+
+    #df[cols].plot(colors = colors)
+
+    reward_trajectory[cols].plot(ax=ax, color = colors) 
     ax.set_ylabel("Rewards in [0,1]")
     ax.set_xlabel("Time")
     ax.set_title("Rewards")
     ax.set_ylim((0, 3.0))
     # Sum values for each column
     reward_sums = reward_trajectory.sum()
-        
+
+from matplotlib.colors import Normalize
+
+# Define the range of quality values (replace these with your actual data)
+def plot_quality(ax, min_quality = 0, max_quality = 100, curr_quality = 60):
+
+    # Create a sample array of quality values
+    quality_values = np.array([[curr_quality]])
+
+    # Create a normalization object to map the values to the color map
+    norm = Normalize(vmin=min_quality, vmax=max_quality)
+
+    # Choose a colormap (e.g., 'RdYlGn' for Red-Yellow-Green)
+    cmap = plt.get_cmap('RdYlGn')
+
+    im = ax.imshow(quality_values, cmap=cmap, norm=norm)
+
+    # Add a colorbar to show the mapping of values to colors
+    cbar = plt.colorbar(im, ax=ax, orientation='horizontal', location="bottom", label='Q Values')
+    
+    cbar_marker = cbar.ax.axvline(curr_quality, c='b', linewidth=4.0)
+
+    # Set axis labels and title as needed
+    ax.set_axis_off()
+    return im, cbar_marker, cbar 
+
+
 def plot_trajectory(output_dict, reward_trajectory : pd.DataFrame = None):
     mass_df = output_dict["mass_storage.m_stored_kg"]
     ext_grid_flow = output_dict["res_ext_grid.mdot_kg_per_s"]
