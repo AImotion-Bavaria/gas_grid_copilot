@@ -15,3 +15,8 @@ screen -ls
 screen -r $screen_running
 ```
 The screen running is usually the first 5 digits you see after you've listed all the screens. You can see if you're script is still running or if you've added logging you can see where in the process you are.
+
+Useful copy command for scp
+```
+scp schiendorfer@10.16.240.10:/home/schiendorfer/Documents/projects/gas_grid_ai/cached_models/*.zip .
+```
