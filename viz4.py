@@ -15,6 +15,25 @@ class IKIGasDemoPlot:
     def __init__(self) -> None:
         pass
 
+    @property
+    def q_vals(self):
+        return self._q_vals
+
+    @q_vals.setter
+    def q_vals(self, q_vals):
+        """Q_vals may come from a CUDA device and need to be unboxed"""
+        # I probably want them normalized with respect to time step t 
+        # earlier Q-vals need to be divided by a larger number
+        if not q_vals:
+            return
+        max_T = len(q_vals)
+        self._q_vals = [q_val.detach().numpy() / (max_T - i) for i, q_val in enumerate(q_vals)]
+        
+
+    @q_vals.deleter
+    def q_vals(self):
+        del self._q_vals
+
     def image_plot(self, imgs, output_dict, reward_trajectory, 
                    q_vals = None, 
                    plot_data : dict = None, 
@@ -39,10 +58,10 @@ class IKIGasDemoPlot:
         im = image.imread(ikigas_logo)
         self.time_index = 5
         if q_vals:
-            self.q_vals = [q_val.detach().numpy() for q_val in q_vals]
+            self.q_vals = q_vals
             q_vals = self.q_vals
         else:
-            self.q_vals = q_vals
+            self.q_vals = None
 
         imax = ax4
         # remove ticks & the box from imax 
@@ -200,10 +219,14 @@ class IKIGasDemoPlot:
         self.plt_image.set_data(imgs[self.time_index])
 
         # the q_values 
-        self.q_vals = [q_val.detach().numpy() for q_val in q_vals]
+        self.q_vals = q_vals
         q_vals = self.q_vals
         self.q_plot_cbar.remove()
         self.__axq_values.clear()
+
+        fig = self.__axq_values.get_figure()
+        fig.delaxes(self.__axq_values)
+        self.__axq_values = fig.add_axes([0.55,  0.04, 0.12, 0.12])
         self.q_plot, self.q_plot_cbar_marker, self.q_plot_cbar =  plot_quality(self.__axq_values , min_quality= np.min(q_vals).item(), max_quality=np.max(q_vals).item(), curr_quality=q_vals[self.time_index].item())
       
 
