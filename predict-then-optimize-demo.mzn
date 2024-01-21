@@ -1,3 +1,5 @@
+% =================================
+% Time and scaled time definitions
 set of int: Time = 0..9;
 float: min_T = min(Time);
 float: max_T = max(Time); 
@@ -17,8 +19,32 @@ constraint forall(t in Time) (
               predicted_source_flow[t] = time_to_source_prediction(scaled_Time[t])
            );
 
-
 % =================================
+% Actual storage control
+float: storage_max_kg = 500.0;
+set of float: Storage_capacity = 0..storage_max_kg;
+array[Time] of var Storage_capacity: storage;
+constraint storage[0] = 2.0;
+array[Time] of var -0.05 .. 0.05: storage_in_flow; % positive for charging, negative for discharging
+
+% dynamics
+constraint forall(t in Time diff{9}) (
+  storage[t+1] = storage[t] + storage_in_flow[t] * 3600
+);
+
+array[Time] of var float: supply;
+array[Time] of var float: demand;
+array[Time] of var -10.0..10.0: external_grid; 
+
+constraint forall(t in Time) (
+  supply[t] = predicted_source_flow[t] /\
+  demand[t] = predicted_sink_flow[t] + storage_in_flow[t] /\
+  external_grid[t] = supply[t] - demand[t] % residual load
+);
+
+solve minimize sum(t in Time) (abs(external_grid[t]));
+% =================================
+% Neural net definitions
 include "neural_net.mzn";
 
 function var float: neural_net_1d(var float: input,

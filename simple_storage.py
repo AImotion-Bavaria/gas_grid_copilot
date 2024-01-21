@@ -189,27 +189,30 @@ def plot_trajectory(output_dict, reward_trajectory : pd.DataFrame = None):
     else:
         fig, axs = plt.subplots(2, 2, figsize=(15, 8))
         # Plotting the data frames on each subplot
-        axs[0,0].plot(time_index, mass_df, color='blue')
-        axs[0,0].set_title('Mass Storage')
-        axs[0,0].set_xlabel('Values')
-        axs[0,0].set_ylabel('Time')
+        plot_storage(output_dict, ax=axs[0,0])
+        plot_flows(output_dict, axs[0, 1])
+        #axs[0,0].plot(time_index, mass_df, color='blue')
+        #axs[0,0].set_title('Mass Storage')
+        #axs[0,0].set_xlabel('Values')
+        #axs[0,0].set_ylabel('Time')
 
-        axs[0, 1].plot(time_index, ext_grid_flow,  color='green', label ="Ext grid flow")
-        axs[0, 1].set_xlabel('Values')
+        # axs[0, 1].plot(time_index, ext_grid_flow,  color='green', label ="Ext grid flow")
+        # axs[0, 1].set_xlabel('Values')
 
-        axs[0, 1].plot( time_index, source_flow, color='red', label = "Source flow")
-        axs[0, 1].set_xlabel('Values')
-        axs[0, 1].legend()
+        # axs[0, 1].plot( time_index, source_flow, color='red', label = "Source flow")
+        # axs[0, 1].set_xlabel('Values')
+        # axs[0, 1].legend()
 
-        axs[0, 1].plot( time_index, mass_storage_flow, color='blue', label = "Mass storage flow")
-        axs[0, 1].set_title('Flows')
-        axs[0, 1].set_xlabel('Values')
+        # axs[0, 1].plot( time_index, mass_storage_flow, color='blue', label = "Mass storage flow")
+        # axs[0, 1].set_title('Flows')
+        # axs[0, 1].set_xlabel('Values')
 
-        axs[0, 1].plot( time_index, sink_flow, label = "Sink flow")
-        axs[0, 1].set_xlabel('Values')
-        axs[0, 1].legend()
+        # axs[0, 1].plot( time_index, sink_flow, label = "Sink flow")
+        # axs[0, 1].set_xlabel('Values')
+        # axs[0, 1].legend()
 
-        reward_trajectory.plot(ax=axs[1,0]) 
+        plot_reward_trajectory(reward_trajectory, axs[1,0])
+        #reward_trajectory.plot(ax=axs[1,0]) 
    
         # Sum values for each column
         reward_sums = reward_trajectory.sum()

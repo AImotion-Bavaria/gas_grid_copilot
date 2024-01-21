@@ -13,7 +13,7 @@ constraint forall(t in Time) (scaled_Time[t] = normalize(t, min_T, max_T));
 
 constraint forall(t in Time) (
             predicted_flow[t] = 
-                neural_net_1d(scaled_Time[t], input_ids, output_ids, biases, edge_weights, edge_parent, first_edge, NT_RELU)
+                neural_net_1d(scaled_Time[t], input_ids, output_ids, bias, edge_weight, edge_parent, first_edge, NT_RELU)
            );
 
 %var float: output_prediction;
@@ -28,11 +28,11 @@ set of int: Edges = 1..N_Edges;
 array[int] of int: input_ids; % = [1];
 array[int] of int: output_ids; % = [N_Neurons];
 
-array[Neurons] of float: biases;
+array[Neurons] of float: bias;
 array[Neurons] of Edges: first_edge;
 %array[Neurons] of var float: all_nodes; % for debugging
 
-array[Edges] of float: edge_weights;
+array[Edges] of float: edge_weight;
 array[Edges] of Neurons: edge_parent;
 
 % =================================

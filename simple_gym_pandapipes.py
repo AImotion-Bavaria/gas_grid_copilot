@@ -105,6 +105,8 @@ class SimpleGasStorageEnv(gym.Env):
         if self.normalize_rewards :
             self.discover_reward_limits()
             self.reward_weights = np.ones(3)
+        else:
+            self.reward_weights = np.ones(3)
 
     def __convert_to_box(self, observations_dict):
         low = []
@@ -408,7 +410,7 @@ def simulate_trained_policy(env, agent):
     return reward_trajectory, imgs, q_vals
 
 def run_trajectory(env, agent):
-    reward_trajectory, imgs = simulate_trained_policy(env, agent)
+    reward_trajectory, imgs, q_vals = simulate_trained_policy(env, agent)
     plot_trajectory(env.get_output_dict(), reward_trajectory)
     # write images to pickled files
     
@@ -425,10 +427,10 @@ def run_trajectory(env, agent):
     with open(data_file_name, 'wb') as file:
         pickle.dump((env.get_output_dict(), reward_trajectory), file)
 
-    return reward_trajectory, imgs, output_dict
+    return reward_trajectory, imgs, env.get_output_dict()
 
 if __name__ == "__main__":
-    env = SimpleGasStorageEnv(get_example_line)
+    env = SimpleGasStorageEnv(get_example_line, normalize_rewards=True)
     obs, info = env.reset()
     print(obs)
 
@@ -436,12 +438,17 @@ if __name__ == "__main__":
     # just dummy rotating inflows
     inflows = [SimpleGasStorageEnv.MAX_STORAGE_MDOT_KG_PER_S, 0., SimpleGasStorageEnv.MIN_STORAGE_MDOT_KG_PER_S/2]
     fixed_dummy = FixedDummyAgent(inflows)
-    #run_trajectory(env, fixed_dummy)
+    run_trajectory(env, fixed_dummy)
+
+    # inflows obtained from mathematical optimization
+    vals = [0.05, 0.05, 0.03833333333333333, -0.04999999999999979, -0.04999999999999979, 0.05,  0.05, -0.04999999999999947, -0.04999999999999979, -0.05000000000000004]
+    fixed_dummy = FixedDummyAgent(vals)
+    run_trajectory(env, fixed_dummy)
 
     # train our very first agent to maximize the rewards
-    trained_agent = train_SB_Agent(env, algorithm=SAC, force_retraining=False)
+    #trained_agent = train_SB_Agent(env, algorithm=SAC, force_retraining=False)
 
-    rewards, imgs, output_dict = run_trajectory(env, trained_agent)
+    #rewards, imgs, output_dict = run_trajectory(env, trained_agent)
     
     from stable_baselines3.common.policies import ContinuousCritic
 
