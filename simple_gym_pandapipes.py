@@ -19,7 +19,7 @@ import os
 from pandapipes.networks import gas_meshed_square
 
 from timeseries_wrapper import TimeseriesWrapper
-from viz_step_by_step import plot_gas_network, get_network_image
+from ikigas_state_rendering import plot_gas_network, get_network_image
 from stable_baselines3 import PPO, SAC
 import torch as th
 from sklearn.preprocessing import MinMaxScaler
