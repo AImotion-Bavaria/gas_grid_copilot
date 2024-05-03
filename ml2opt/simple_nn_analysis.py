@@ -1,7 +1,7 @@
 import torch as th
 import os
 import pickle  
-from simple_nn import SimpleNN
+from pandapipes.ml2opt.simple_nn import SimpleNN
 
 from pandapipes.ml2opt.torch2minizinc import convert_to_minizinc_data, get_minizinc_nnet_parameters
 

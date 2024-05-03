@@ -12,8 +12,8 @@ import pandas as pd
 from simple_storage import plot_flows, plot_storage, plot_reward_trajectory, plot_quality
 
 class IKIGasDashboard:
-    def __init__(self) -> None:
-        pass
+    def __init__(self, use_qualicision = False) -> None:
+        self.use_qualicision = use_qualicision
 
     @property
     def q_vals(self):
@@ -29,7 +29,6 @@ class IKIGasDashboard:
         max_T = len(q_vals)
         self._q_vals = [q_val.detach().numpy() / (max_T - i) for i, q_val in enumerate(q_vals)]
         
-
     @q_vals.deleter
     def q_vals(self):
         del self._q_vals
@@ -139,13 +138,14 @@ class IKIGasDashboard:
         self.all_reward_trajectories = all_reward_trajectories
 
         # below we want to see the conflict interaction matrix
-        axinteractionbutton = fig.add_axes([0.7, 0.55, 0.2, 0.03])
-        interaction = Button(axinteractionbutton, 'Show model reward interactions')
-        interaction.on_clicked(lambda val : self.show_interaction_matrix(self.reward_trajectory, "Reward interactions (over this model's traces)"))
+        axinteractionbutton = fig.add_axes([0.7, 0.55, 0.25, 0.03])
+        qualicision_branding = "Qualicision " if self.use_qualicision else ""
+        interaction = Button(axinteractionbutton, f'Show {qualicision_branding}model reward interactions')
+        interaction.on_clicked(lambda val : self.show_interaction_matrix(self.reward_trajectory, f"{qualicision_branding}Reward interactions (over this model's traces)"))
 
-        axallinteractionbutton = fig.add_axes([0.45, 0.55, 0.2, 0.03])     
-        allinteraction = Button(axallinteractionbutton, 'Show all reward interactions')
-        allinteraction.on_clicked(lambda val : self.show_interaction_matrix(self.all_reward_trajectories, "Reward interactions (over all traces)"))
+        axallinteractionbutton = fig.add_axes([0.40, 0.55, 0.25, 0.03])     
+        allinteraction = Button(axallinteractionbutton, f'Show {qualicision_branding}all reward interactions')
+        allinteraction.on_clicked(lambda val : self.show_interaction_matrix(self.all_reward_trajectories, f"{qualicision_branding}Reward interactions (over all traces)"))
 
         # Create the Vertical lines on the histogram
         self.time_lines = [ax_.axvline(5, color='darkred') for ax_ in [ax1, ax2, ax3]]
@@ -164,16 +164,46 @@ class IKIGasDashboard:
         plt.show()
 
     def show_interaction_matrix(self, interaction_matrix, title):
-        plt.figure()
-        corr = interaction_matrix.corr()
-        ax = sns.heatmap(corr, 
-            xticklabels=corr.columns.values,
-            yticklabels=corr.columns.values,
-            cmap=sns.diverging_palette(10, 133, n=256, as_cmap=True))
-        plt.title(title)
-        #ax.set_aspect("auto")
-        plt.tight_layout()
-        plt.show()
+        plt.figure()    
+        if self.use_qualicision:
+            from pyqualicision.project.decision_project import DecisionProject
+            from pyqualicision.labeling_functions import MinMaxScaler
+
+            predict_df = interaction_matrix.copy()
+            # rescale to -1, 1
+            # Define the custom range
+            min_val = -1
+            max_val = 1
+
+            # Rescale the columns
+            df_scaled = predict_df
+            columns_to_rescale = ['reward_storage', 'reward_mass_flow', 'reward_difference']
+            for column in columns_to_rescale:
+                min_val_orig = predict_df[column].min()
+                max_val_orig = predict_df[column].max()
+                df_scaled[column] = ((predict_df[column] - min_val_orig) / (max_val_orig - min_val_orig)) * (max_val - min_val) + min_val
+            predict_df = df_scaled
+            predict_df.index = predict_df.index.astype(str)
+
+            project = DecisionProject.from_labeled_impact_matrix(
+                name=title,
+                labeled_impact_matrix=predict_df,
+                criteria_priority_vector=0.5,
+            )
+            project.plot_qualified_interactions()
+            plt.title(title)
+            plt.tight_layout()
+            plt.show()
+        else:
+            corr = interaction_matrix.corr()
+            ax = sns.heatmap(corr, 
+                xticklabels=corr.columns.values,
+                yticklabels=corr.columns.values,
+                cmap=sns.diverging_palette(10, 133, n=256, as_cmap=True))
+            plt.title(title)
+            #ax.set_aspect("auto")
+            plt.tight_layout()
+            plt.show()
     
     def update_plot(self, time_index, grid_image):
         self.time_index = time_index
