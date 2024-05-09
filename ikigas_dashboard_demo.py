@@ -95,6 +95,6 @@ if __name__ == "__main__":
  
         imgs, obs_dict, rewards, q_vals = plot_data[(1,1,1)]
 
-        demo_plot = IKIGasDashboard(use_qualicision=True)
+        demo_plot = IKIGasDashboard(use_qualicision=False)
         demo_plot.image_plot(imgs, obs_dict, rewards, plot_data=plot_data, q_vals=q_vals, all_reward_trajectories=all_reward_trajectories)
         plt.show()

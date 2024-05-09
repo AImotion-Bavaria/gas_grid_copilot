@@ -1,22 +1,14 @@
-# Tip for handling screen
-You can use screen
-```
-sudo apt-get install screen
+# Gas Grid Copilot Demo
+## Setup hints:
 
-screen 
+The main file of interest is `ikigas_dashboard_demo.py`
 
-./run-my-script
-```
-Ctrl-A then D to get out of your screen
-From there you will be able to close out your ssh terminal. Come back later and run
-```
-screen -ls
+Use a conda/venv environment with `requirements.txt` or `energy.yml`
 
-screen -r $screen_running
-```
-The screen running is usually the first 5 digits you see after you've listed all the screens. You can see if you're script is still running or if you've added logging you can see where in the process you are.
+Run `ikigas_dashboard_demo.py` 
+1. Once with `prepare_and_train = True` (in the main method)
+2. You should now have a directory `cached_models` containing a number of .zip files for the trained agents and a pickled file of state plots
+3. Run `ikigas_dashboard_demo.py` again with  `prepare_and_train = False`
 
-Useful copy command for scp
-```
-scp schiendorfer@10.16.240.10:/home/schiendorfer/Documents/projects/gas_grid_ai/cached_models/*.zip .
-```
+## Activating Pyqualicision
+If you have `pyqualicision`binaries, you may use `demo_plot = IKIGasDashboard(use_qualicision=True)` in `ikigas_dashboard_demo.py` otherwise use `demo_plot = IKIGasDashboard(use_qualicision=False)` to default to simple reward correlations.
