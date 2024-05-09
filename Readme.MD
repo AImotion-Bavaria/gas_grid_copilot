@@ -3,7 +3,7 @@
 
 The main file of interest is `ikigas_dashboard_demo.py`
 
-Use a conda/venv environment with `requirements.txt` or `energy.yml`
+Use a conda/venv environment with `requirements.txt` or `energy.yml` (or `energy_linux.yml`)
 
 Run `ikigas_dashboard_demo.py` 
 1. Once with `prepare_and_train = True` (in the main method)
