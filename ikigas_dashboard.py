@@ -169,7 +169,7 @@ class IKIGasDashboard:
             from pyqualicision.project.decision_project import DecisionProject
             from pyqualicision.labeling_functions import MinMaxScaler
 
-            predict_df = interaction_matrix.copy()
+            predict_df = interaction_matrix.copy()               
             # rescale to -1, 1
             # Define the custom range
             min_val = -1
@@ -177,10 +177,12 @@ class IKIGasDashboard:
 
             # Rescale the columns
             df_scaled = predict_df
-            columns_to_rescale = ['reward_storage', 'reward_mass_flow', 'reward_difference']
+            columns_to_rescale = ['reward_storage', 'reward_mass_flow', 'reward_difference'] 
             for column in columns_to_rescale:
                 min_val_orig = predict_df[column].min()
                 max_val_orig = predict_df[column].max()
+                if max_val_orig - min_val_orig == 0:
+                    continue            
                 df_scaled[column] = ((predict_df[column] - min_val_orig) / (max_val_orig - min_val_orig)) * (max_val - min_val) + min_val
             predict_df = df_scaled
             predict_df.index = predict_df.index.astype(str)

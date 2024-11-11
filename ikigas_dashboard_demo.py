@@ -66,7 +66,7 @@ if __name__ == "__main__":
         inflows = [SimpleGasStorageEnv.MAX_STORAGE_MDOT_KG_PER_S, 0., SimpleGasStorageEnv.MIN_STORAGE_MDOT_KG_PER_S/2]
         fixed_dummy = FixedDummyAgent(inflows)
         #run_trajectory(env, fixed_dummy)
-        for algo in [PPO, SAC]:
+        for algo in [PPO, SAC]: 
             plot_data = prepare_trained_models(env, algo)
         
             plot_data_name = f"cached_models/{algo.__name__}_prepared_plot_data.pickle"
@@ -95,6 +95,6 @@ if __name__ == "__main__":
  
         imgs, obs_dict, rewards, q_vals = plot_data[(1,1,1)]
 
-        demo_plot = IKIGasDashboard(use_qualicision=False)
+        demo_plot = IKIGasDashboard(use_qualicision=True)
         demo_plot.image_plot(imgs, obs_dict, rewards, plot_data=plot_data, q_vals=q_vals, all_reward_trajectories=all_reward_trajectories)
         plt.show()
